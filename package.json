@@ -1,0 +1,23 @@
+{
+  "name": "danzversity-flyers",
+  "version": "0.1.0",
+  "description": "Danzversity Flyer Maker — Hybrid AI+code compositing engine",
+  "main": "render-service/server.js",
+  "scripts": {
+    "start": "node render-service/server.js",
+    "dev": "node --watch render-service/server.js",
+    "render-test": "node render-service/test-render.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "sharp": "^0.33.0",
+    "express": "^4.18.0",
+    "cors": "^2.8.5",
+    "qrcode": "^1.5.0",
+    "googleapis": "^130.0.0",
+    "multer": "^1.4.5-lts.1",
+    "dotenv": "^16.3.0"
+  }
+}
