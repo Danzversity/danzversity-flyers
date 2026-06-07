@@ -19,6 +19,7 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
+const sharp = require('sharp');
 
 const brand = require('./brand');
 const templates = require('./templates');
@@ -189,6 +190,19 @@ app.get('/people', async (req, res) => {
   try { res.json({ ok: true, source: library.status().people, items: await library.list('people') }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+
+// Small JPEG thumbnail of a library asset (works for Drive + local).
+app.get('/thumb', async (req, res) => {
+  try {
+    const kind = req.query.kind === 'people' ? 'people' : 'backgrounds';
+    if (!req.query.id) return res.status(400).end();
+    const buf = await library.get(kind, String(req.query.id));
+    const out = await sharp(buf).resize(240, 300, { fit: 'cover' }).jpeg({ quality: 70 }).toBuffer();
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.send(out);
+  } catch (e) { res.status(404).end(); }
+});
 app.post('/upload-background', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ ok: false, error: 'file required' });
@@ -233,9 +247,12 @@ app.post('/compose', upload.fields([{ name: 'photo', maxCount: 1 }]), async (req
       base64: i.buffer.toString('base64'),
     }));
 
+    let adCopy = null;
+    try { adCopy = assemble(templateKey, content).adCopy; } catch (_) { /* non-fatal */ }
+
     res.json({
       ok: true, templateKey, family: result.family, channel: result.channel, slug: result.slug, layout: result.layout,
-      month: content.month || '', driveConfigured: gdrive.isConfigured(),
+      month: content.month || '', driveConfigured: gdrive.isConfigured(), adCopy,
       counts: { total: images.length }, renderMs: Date.now() - t0, images,
     });
   } catch (e) {

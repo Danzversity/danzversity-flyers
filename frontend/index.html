@@ -21,9 +21,9 @@
   </header>
 
   <main>
-    <!-- CREATE -->
+    <!-- COMPOSE -->
     <section class="panel" id="createPanel">
-      <h2 class="step">① Create a master</h2>
+      <h2 class="step">① Compose a flyer</h2>
       <div class="grid2">
         <label class="field">Template
           <select id="tplSelect"></select>
@@ -33,12 +33,33 @@
         </label>
       </div>
       <div id="tplFields" class="tpl-fields"></div>
-      <div class="create-actions">
-        <button id="genBtn" class="primary">Generate 4 with Ideogram</button>
-        <span id="genHint" class="muted"></span>
+
+      <div class="picker-block">
+        <div class="picker-head">
+          <span>Background <span class="muted" id="bgSource"></span></span>
+          <button id="addBgBtn" class="ghost sm" type="button">+ Add background</button>
+          <input id="addBgInput" type="file" accept="image/*" hidden />
+        </div>
+        <div id="bgPicker" class="thumbs">loading…</div>
       </div>
-      <div id="candidates" class="candidates hidden"></div>
-      <div id="guided" class="guided hidden"></div>
+
+      <div class="picker-block">
+        <div class="picker-head">
+          <span>Photo of real people <span class="muted">(optional)</span></span>
+          <label class="savechk"><input type="checkbox" id="savePhoto" /> save upload to library</label>
+          <button id="addPhotoBtn" class="ghost sm" type="button">⬆ Upload photo</button>
+          <input id="photoInput" type="file" accept="image/*" hidden />
+        </div>
+        <div id="peoplePicker" class="thumbs">loading…</div>
+        <div id="photoChosen" class="muted"></div>
+      </div>
+
+      <label class="chk"><input type="checkbox" id="qrToggle" checked /> Include QR code <span class="muted">— auto-off for paid (Meta/PMax)</span></label>
+
+      <div class="create-actions">
+        <button id="composeBtn" class="primary big">Compose flyer →</button>
+        <span id="composeHint" class="muted"></span>
+      </div>
       <div id="adcopy" class="adcopy hidden"></div>
     </section>
 
