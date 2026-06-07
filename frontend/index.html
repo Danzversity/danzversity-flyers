@@ -21,8 +21,30 @@
   </header>
 
   <main>
-    <!-- INPUT -->
+    <!-- CREATE -->
+    <section class="panel" id="createPanel">
+      <h2 class="step">① Create a master</h2>
+      <div class="grid2">
+        <label class="field">Template
+          <select id="tplSelect"></select>
+        </label>
+        <label class="field">CTA URL <span id="urlStatus" class="url-status"></span>
+          <input id="ctaUrl" type="text" placeholder="https://danzversity.com/camps" autocomplete="off" />
+        </label>
+      </div>
+      <div id="tplFields" class="tpl-fields"></div>
+      <div class="create-actions">
+        <button id="genBtn" class="primary">Generate 4 with Ideogram</button>
+        <span id="genHint" class="muted"></span>
+      </div>
+      <div id="candidates" class="candidates hidden"></div>
+      <div id="guided" class="guided hidden"></div>
+      <div id="adcopy" class="adcopy hidden"></div>
+    </section>
+
+    <!-- INPUT / SIZE -->
     <section class="panel" id="inputPanel">
+      <h2 class="step">② Size &amp; ship <span class="muted">— auto-filled when you pick a master above, or drop your own</span></h2>
       <div class="grid2">
         <label class="field">Template / event name
           <input id="template" type="text" placeholder="Summer Camp Week 1" autocomplete="off" />

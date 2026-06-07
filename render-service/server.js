@@ -21,9 +21,12 @@ const cors = require('cors');
 const multer = require('multer');
 
 const brand = require('./brand');
+const templates = require('./templates');
 const { deriveFamily, deriveSize, slugify, masterMeta } = require('./pipeline/derive');
 const { buildBundle } = require('./pipeline/bundle');
+const { assemble, verifyUrl } = require('./pipeline/prompt');
 const gdrive = require('./integrations/gdrive');
+const ideogram = require('./integrations/ideogram');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -107,10 +110,69 @@ app.get('/health', (req, res) => {
     version: VERSION,
     brandVersion: brand.VERSION,
     driveConfigured: gdrive.isConfigured(),
+    ideogramConfigured: ideogram.isConfigured(),
+    templateCount: templates.TEMPLATES.length,
     families: Object.values(brand.families).map((f) => ({ key: f.key, label: f.label, channel: f.channel })),
     sizes: Object.values(brand.sizes).map((s) => ({ key: s.key, label: s.label, w: s.w, h: s.h })),
     bundles: Object.values(brand.bundles).map((b) => ({ key: b.key, label: b.label, sizes: b.sizes })),
   });
+});
+
+// ── CREATE step ──────────────────────────────────────────────────────────────
+// List templates + their content fields.
+app.get('/templates', (req, res) => {
+  res.json({ ok: true, ideogramConfigured: ideogram.isConfigured(), templates: templates.listTemplates() });
+});
+
+// Assemble the Ideogram prompt + ad copy from form content, and live-check the URL.
+// No generation — this is the "guided" output and the preview before generating.
+app.post('/assemble', async (req, res) => {
+  try {
+    const { templateKey, content } = req.body || {};
+    if (!templateKey) return res.status(400).json({ ok: false, error: 'templateKey required' });
+    const a = assemble(templateKey, content || {});
+    const urlStatus = await verifyUrl(a.url);
+    res.json({ ok: true, ...a, urlStatus, ideogramConfigured: ideogram.isConfigured() });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// Generate candidate masters via Ideogram. If no key, returns 503 + the assembled
+// prompt so the frontend can run in guided mode (paste into Ideogram by hand).
+app.post('/generate', async (req, res) => {
+  const t0 = Date.now();
+  try {
+    const { templateKey, content, numImages } = req.body || {};
+    if (!templateKey) return res.status(400).json({ ok: false, error: 'templateKey required' });
+    const a = assemble(templateKey, content || {});
+    const urlStatus = await verifyUrl(a.url);
+
+    if (!ideogram.isConfigured()) {
+      return res.status(503).json({ ok: false, mode: 'guided', error: 'IDEOGRAM_API_KEY not set', assembled: { ...a, urlStatus } });
+    }
+
+    const n = Math.min(Math.max(parseInt(numImages, 10) || 4, 1), 8);
+    const out = await ideogram.generate({
+      prompt: a.prompt, negativePrompt: a.negativePrompt, aspectRatio: a.aspectRatio, numImages: n, styleRefFiles: a.styleRefs,
+    });
+    res.json({
+      ok: true, mode: 'generated', templateKey, family: a.family, channel: a.channel,
+      url: a.url, urlStatus, adCopy: a.adCopy,
+      styleRefsUsed: out.styleRefsUsed, styleRefsMissing: out.styleRefsMissing,
+      generateMs: Date.now() - t0,
+      candidates: out.candidates.map((c, i) => ({ index: i, seed: c.seed, resolution: c.resolution, base64: c.buffer.toString('base64') })),
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Standalone URL check (Standing Rule 1).
+app.get('/verify-url', async (req, res) => {
+  const u = req.query.u;
+  if (!u) return res.status(400).json({ ok: false, error: '?u= required' });
+  res.json({ ok: true, ...(await verifyUrl(String(u))) });
 });
 
 const processUpload = upload.fields([

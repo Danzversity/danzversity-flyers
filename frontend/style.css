@@ -140,7 +140,33 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .spin { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(0,0,0,.3); border-top-color: #000; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -2px; margin-right: 7px; }
 @keyframes sp { to { transform: rotate(360deg); } }
 
+/* ── Create step ─────────────────────────────────────────── */
+.step { font-family: 'Bebas Neue', sans-serif; font-size: 23px; letter-spacing: .5px; margin: 0 0 16px; color: var(--gold); font-weight: 400; }
+.step .muted { font-family: 'Inter', sans-serif; font-size: 12.5px; letter-spacing: 0; }
+select { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 11px 12px; font-size: 15px; font-family: inherit; width: 100%; }
+select:focus { outline: none; border-color: var(--gold); }
+.url-status { font-weight: 700; font-size: 12px; }
+.url-status.ok { color: var(--ok); }
+.url-status.bad { color: var(--err); }
+.tpl-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 16px 0; }
+.create-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.create-actions .primary { white-space: nowrap; }
+.candidates, .guided, .adcopy { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 18px; }
+.candidates h3, .guided h3, .adcopy h3 { font-size: 16px; margin: 0 0 14px; }
+.adcopy h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--gold); margin: 18px 0 8px; }
+.cand-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.cand { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.cand-thumb { background: #050505; border: 1px solid var(--line); border-radius: 6px; height: 230px; display: grid; place-items: center; overflow: hidden; }
+.cand-thumb img { max-width: 100%; max-height: 100%; }
+.cand .primary { width: 100%; }
+.copyblock { margin-bottom: 12px; }
+.copyblock-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.copyblock textarea { width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 10px 12px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.5; resize: vertical; }
+.copyblock textarea:focus { outline: none; border-color: var(--gold); }
+.kv { font-size: 12.5px; color: var(--muted); margin: 6px 0 4px; }
+.kv b { color: var(--text); }
+
 @media (max-width: 720px) {
-  .grid2, .masters { grid-template-columns: 1fr; }
+  .grid2, .masters, .tpl-fields { grid-template-columns: 1fr; }
   .resultsbar { align-items: stretch; }
 }

@@ -38,6 +38,7 @@ function init() {
   $('saveDrive').addEventListener('click', onSaveDrive);
 
   checkHealth();
+  initCreate();
 }
 
 async function checkHealth() {
@@ -291,6 +292,178 @@ function toast(msg, kind) {
   t.textContent = msg; t.className = 'toast ' + (kind || '');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.add('hidden'), 4200);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ① CREATE — template picker → prompt/generate → pick master → flows into sizing
+// ════════════════════════════════════════════════════════════════════════════
+const create = { templates: [], ideogramConfigured: false };
+
+async function initCreate() {
+  try {
+    const r = await fetch(`${API}/templates`);
+    const j = await r.json();
+    create.templates = j.templates || [];
+    create.ideogramConfigured = !!j.ideogramConfigured;
+  } catch (e) {
+    return; // API offline; Create stays empty, upload step still works
+  }
+
+  const sel = $('tplSelect');
+  const groups = {};
+  create.templates.forEach((t) => { (groups[t.group] = groups[t.group] || []).push(t); });
+  sel.innerHTML = '';
+  Object.keys(groups).forEach((g) => {
+    const og = document.createElement('optgroup'); og.label = g;
+    groups[g].forEach((t) => {
+      const o = document.createElement('option'); o.value = t.key;
+      o.textContent = t.label + (t.channel === 'paid' ? '  ·  paid' : '');
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+  sel.addEventListener('change', onTemplateChange);
+
+  $('genBtn').textContent = create.ideogramConfigured ? 'Generate 4 with Ideogram' : 'Get prompt + ad copy';
+  $('genHint').textContent = create.ideogramConfigured
+    ? 'pick a winner → it flows into sizing below'
+    : 'Ideogram key not set — guided mode: paste the prompt into Ideogram, then drop your winner in ②';
+  $('genBtn').addEventListener('click', onCreateGenerate);
+  $('ctaUrl').addEventListener('blur', () => checkUrl($('ctaUrl').value));
+  onTemplateChange();
+}
+
+function currentTemplate() { return create.templates.find((t) => t.key === $('tplSelect').value); }
+
+function onTemplateChange() {
+  const t = currentTemplate(); if (!t) return;
+  $('ctaUrl').value = t.defaultUrl || '';
+  checkUrl(t.defaultUrl);
+  const host = $('tplFields'); host.innerHTML = '';
+  t.fields.forEach((fld) => {
+    const lab = el('label', 'field');
+    lab.appendChild(document.createTextNode(fld.label + (fld.required ? ' *' : '')));
+    const inp = el('input'); inp.type = 'text'; inp.id = 'fld_' + fld.name;
+    inp.placeholder = fld.placeholder || ''; if (fld.default) inp.value = fld.default;
+    lab.appendChild(inp); host.appendChild(lab);
+  });
+  ['candidates', 'guided', 'adcopy'].forEach((id) => $(id).classList.add('hidden'));
+}
+
+function collectContent() {
+  const t = currentTemplate(); const c = {};
+  t.fields.forEach((fld) => { const v = $('fld_' + fld.name).value.trim(); if (v) c[fld.name] = v; });
+  c.url = $('ctaUrl').value.trim();
+  return c;
+}
+
+async function checkUrl(u) {
+  const e = $('urlStatus'); if (!u) { e.textContent = ''; return; }
+  e.textContent = '· checking'; e.className = 'url-status';
+  try {
+    const r = await fetch(`${API}/verify-url?u=` + encodeURIComponent(u));
+    const j = await r.json();
+    const good = j.ok && j.status >= 200 && j.status < 400;
+    e.textContent = good ? `· ${j.status} ✓` : `· ${j.status || 'fail'} ✗`;
+    e.className = 'url-status ' + (good ? 'ok' : 'bad');
+  } catch (_) { e.textContent = '· err'; e.className = 'url-status bad'; }
+}
+
+async function onCreateGenerate() {
+  const t = currentTemplate(); if (!t) return;
+  const content = collectContent();
+  const missing = t.fields.filter((fld) => fld.required && !content[fld.name]);
+  if (missing.length) return toast('Fill required: ' + missing.map((m) => m.label).join(', '), 'err');
+
+  const btn = $('genBtn'); const orig = btn.textContent;
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Working…';
+  try {
+    const r = await fetch(`${API}/generate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templateKey: t.key, content, numImages: 4 }),
+    });
+    const j = await r.json();
+    if (r.status === 503 || j.mode === 'guided') renderGuided(j.assembled);
+    else if (j.ok) renderCandidates(j, t);
+    else throw new Error(j.error || 'failed');
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+function renderCandidates(j, t) {
+  const host = $('candidates'); host.innerHTML = '<h3>Pick your winner</h3>'; host.classList.remove('hidden');
+  $('guided').classList.add('hidden');
+  if (j.styleRefsMissing && j.styleRefsMissing.length) {
+    host.appendChild(el('div', 'note note-warn', '⚠ Style refs missing (add to assets/refs/): ' + j.styleRefsMissing.join(', ') + ' — generated prompt-only.'));
+  }
+  const grid = el('div', 'cand-grid');
+  j.candidates.forEach((c) => {
+    const card = el('div', 'cand');
+    card.innerHTML = `<div class="cand-thumb"><img src="data:image/png;base64,${c.base64}" alt=""></div>`;
+    const use = el('button', 'primary sm'); use.textContent = 'Use this →';
+    use.addEventListener('click', () => useCandidate(c, j, t));
+    card.appendChild(use); grid.appendChild(card);
+  });
+  host.appendChild(grid);
+  if (j.adCopy) renderAdCopy(j.adCopy);
+  host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderGuided(a) {
+  const host = $('guided'); host.classList.remove('hidden'); $('candidates').classList.add('hidden');
+  host.innerHTML = '<h3>Guided mode — generate in Ideogram</h3>';
+  host.appendChild(el('div', 'note note-warn', 'Ideogram key not set. Paste the prompt into Ideogram 3.0 (aspect 4:5, Magic Prompt OFF), upload the style references, pick the cleanest of 4, then drop the winner into ② below.'));
+  host.appendChild(copyBlock('Prompt', a.prompt));
+  host.appendChild(copyBlock('Negative prompt', a.negativePrompt));
+  host.appendChild(el('div', 'kv', `<b>Style refs:</b> ${a.styleRefs.join(', ')} &nbsp;·&nbsp; <b>Aspect:</b> ${a.aspectRatio} &nbsp;·&nbsp; <b>Palette:</b> ${a.palette.join(' ')} &nbsp;·&nbsp; <b>URL:</b> ${a.urlStatus ? a.urlStatus.status : '?'}`));
+  if (a.adCopy) renderAdCopy(a.adCopy);
+  host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function copyBlock(label, text) {
+  const wrap = el('div', 'copyblock');
+  const head = el('div', 'copyblock-head'); head.appendChild(el('span', null, label));
+  const btn = el('button', 'ghost sm'); btn.textContent = 'Copy';
+  btn.addEventListener('click', () => { navigator.clipboard.writeText(text); toast(label + ' copied', 'ok'); });
+  head.appendChild(btn);
+  const ta = el('textarea'); ta.readOnly = true; ta.rows = Math.min(6, Math.max(2, Math.ceil(text.length / 60))); ta.value = text;
+  wrap.appendChild(head); wrap.appendChild(ta);
+  return wrap;
+}
+
+function renderAdCopy(ad) {
+  const host = $('adcopy'); host.classList.remove('hidden'); host.innerHTML = '<h3>Ad copy <span class="muted">— paste into Ads Manager</span></h3>';
+  if (ad.meta) {
+    host.appendChild(el('h4', null, 'Meta'));
+    host.appendChild(copyBlock('Primary text', ad.meta.primaryText));
+    host.appendChild(copyBlock('Headline', ad.meta.headline));
+    host.appendChild(copyBlock('Description', ad.meta.description));
+    host.appendChild(el('div', 'kv', `<b>CTA:</b> ${ad.meta.cta} &nbsp;·&nbsp; <b>URL:</b> ${ad.meta.url}`));
+  }
+  if (ad.pmax) {
+    host.appendChild(el('h4', null, 'Google PMax'));
+    host.appendChild(copyBlock('Short headlines', ad.pmax.shortHeadlines.join('\n')));
+    host.appendChild(copyBlock('Long headlines', ad.pmax.longHeadlines.join('\n')));
+    host.appendChild(copyBlock('Descriptions', ad.pmax.descriptions.join('\n')));
+    host.appendChild(copyBlock('Long description', ad.pmax.longDescription));
+  }
+}
+
+// Pick a generated candidate → set it as the master for its family + run sizing.
+function useCandidate(c, j, t) {
+  const file = new File([b64ToBlob(c.base64)], `${t.key}-master.png`, { type: 'image/png' });
+  const fam = j.family;
+  if (fam === 'A') $('famA').checked = true;
+  else if (fam === 'A-Lite') $('famALite').checked = true;
+  else $('famB').checked = true;
+  syncFamilyVisibility();
+  setMaster(fam, file);
+  $('template').value = t.label.replace(/🔥/g, '').replace(/—\s*(Paid|Evergreen|Per Week)/i, '').trim() || t.label;
+  toast('Master selected → sizing all formats…', 'ok');
+  onGenerate();
 }
 
 document.addEventListener('DOMContentLoaded', init);
