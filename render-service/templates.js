@@ -287,7 +287,66 @@ function expandContent(template, content) {
   return c;
 }
 
+// ── Chassis content per template (the code-rendered LOCKED layer) ────────────
+// The skeleton is shared across products — this is only what fills each slot.
+// {tokens} are filled from form content. layout: 'A' (standard) | 'A-Lite' (paid,
+// minimal) | 'B' (hype) | 'testimonial' (quote-centric).
+const FOOTER_ADDRESS = '7531 BURNET RD · AUSTIN, TX 78757';
+
+const CHASSIS = {
+  'summer-camp-evergreen': { layout: 'A', headline: 'HIP HOP SUMMER CAMP', subhead: 'SUMMER 2026', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{ages}', 'TAUGHT BY {instructor}', 'FRIDAY SHOWCASE FOR FAMILIES'], price: '{price}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/CAMPS', qr: true },
+  'summer-camp-perweek': { layout: 'A', headline: 'HIP HOP SUMMER CAMP', subhead: '{weekLine}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{ages}', 'TAUGHT BY {instructor}', 'FRIDAY SHOWCASE FOR FAMILIES'], price: '{price}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/CAMPS', qr: true },
+  'summer-camp-paid': { layout: 'A-Lite', headline: 'HIP HOP SUMMER CAMP', subhead: '{ages} · TAUGHT BY {instructor}', url: 'DANZVERSITY.COM/CAMPS', qr: false },
+  'youth-allages': { layout: 'A', headline: 'HIP HOP DANCE', subhead: '{ages}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['ROOT RUNNERS • FLOW FINDERS', 'VIBE BUILDERS • ELEMENTZ CREW'], cta: 'ENROLL NOW', url: 'DANZVERSITY.COM/YOUTH', qr: true },
+  'youth-paid': { layout: 'A-Lite', headline: 'HIP HOP DANCE CLASSES', subhead: '{ages} · TAUGHT BY {instructor}', url: 'DANZVERSITY.COM/YOUTH', qr: false },
+  'adult': { layout: 'A', headline: 'ADULT HIP HOP', subhead: 'NO EXPERIENCE NEEDED', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['FIRST CLASS FREE'], price: '{price}', cta: 'START YOUR JOURNEY', url: 'DANZVERSITY.COM/ADULTS', qr: true },
+  'adult-paid': { layout: 'A-Lite', headline: 'ADULT HIP HOP', subhead: 'FIRST CLASS FREE · NO EXPERIENCE NEEDED', url: 'DANZVERSITY.COM/ADULTS', qr: false },
+  'breakin': { layout: 'A', headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM', infoLines: ['{time}', '{ages}'], price: '{price}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/BREAKIN', qr: true },
+  'breakin-paid': { layout: 'A-Lite', headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM · {time}', url: 'DANZVERSITY.COM/BREAKIN', qr: false },
+  'younity-nights': { layout: 'B', headline: '(YOU)NITY NIGHTS', subhead: 'FREE MONTHLY EVENT', tagline: "MORE THAN MOVES — IT'S CULTURE", infoLines: ['LIVE PERFORMANCES | WORKSHOPS | OPEN MIC', '{schedule}'], url: 'DANZVERSITY.COM', qr: true },
+  'workshop-internal': { layout: 'A', headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
+  'workshop-nametalent': { layout: 'B', headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
+  'battle': { layout: 'B', headline: 'DANCE BATTLE', subhead: '1V1 ALL STYLES', infoLines: ['{date}', '{entry}'], cta: 'STEP IN THE CYPHER', url: 'DANZVERSITY.COM', qr: true },
+  'couples': { layout: 'A', headline: 'COUPLES DANCE NIGHT', subhead: 'NO EXPERIENCE REQUIRED', infoLines: ['{datetime}'], price: '{price}', cta: 'BOOK YOUR SPOT', url: 'DANZVERSITY.COM', qr: true },
+  'team-audition': { layout: 'A', headline: '{team} AUDITIONS', infoLines: ['{datetime}', '{ages}', '{commitment}'], cta: 'SIGN UP', url: 'DANZVERSITY.COM/TEAMS', qr: true },
+  'testimonial': { layout: 'testimonial', quote: '{quote}', keyword: '{keyword}', reviewer: '{reviewer}', url: 'DANZVERSITY.COM', qr: false },
+};
+
+// Fill a template's chassis content from form input → ready for the compositor.
+function buildChassis(key, content = {}) {
+  const t = byKey[key];
+  if (!t) throw new Error(`Unknown template: ${key}`);
+  const base = CHASSIS[key];
+  if (!base) return null;
+
+  const filled = {};
+  for (const fld of t.fields) {
+    const v = content[fld.name];
+    filled[fld.name] = v != null && String(v).trim() !== '' ? String(v).trim() : (fld.default || '');
+  }
+  const expanded = expandContent(t, { ...filled, ...content });
+  for (const k of Object.keys(expanded)) if (filled[k] == null || filled[k] === '') filled[k] = expanded[k];
+
+  const fill = (s) => String(s).replace(/\{(\w+)\}/g, (m, k) => (filled[k] != null ? filled[k] : '')).replace(/\s{2,}/g, ' ').trim();
+
+  const spec = { layout: base.layout, logo: true };
+  if (base.headline) spec.headline = fill(base.headline);
+  if (base.subhead) { const v = fill(base.subhead); if (v) spec.subhead = v; }
+  if (base.tagline) spec.tagline = fill(base.tagline);
+  if (base.infoLines) spec.infoLines = base.infoLines.map(fill).filter(Boolean);
+  if (base.price) { const v = fill(base.price); if (v) spec.price = v; }
+  if (base.cta) spec.cta = fill(base.cta);
+  if (base.quote) spec.quote = fill(base.quote);
+  if (base.keyword) spec.keyword = fill(base.keyword);
+  if (base.reviewer) spec.reviewer = fill(base.reviewer);
+  spec.url = fill(base.url) || 'DANZVERSITY.COM';
+  spec.address = FOOTER_ADDRESS;
+  if (base.qr && content.qr !== false) spec.qr = content.qrUrl || t.defaultUrl;
+  return spec;
+}
+
 module.exports = {
   PALETTE, NEGATIVE_PROMPT, OPENERS, STYLE_REFS, ADDRESS, CAMP_WEEKS,
   TEMPLATES, byKey, listTemplates, expandContent,
+  CHASSIS, FOOTER_ADDRESS, buildChassis,
 };

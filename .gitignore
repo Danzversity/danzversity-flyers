@@ -6,5 +6,5 @@ node_modules/
 output/
 tmp/
 test-output/
-!assets/logo.png
-!backgrounds/**/*.png
+!assets/refs/*.png
+!assets/refs/*.jpg
