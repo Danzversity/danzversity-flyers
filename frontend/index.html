@@ -1,4 +1,94 @@
-<!-- Placeholder — Claude Code will build this in Session 2 -->
 <!DOCTYPE html>
-<html><head><title>Danzversity Flyer Maker</title></head>
-<body><h1>Coming soon</h1></body></html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Danzversity Flyer Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <img class="logo" src="https://i.postimg.cc/syPRP0XL/Danzversity-Logo-Cropped.png" alt="Danzversity" />
+    <div class="titles">
+      <h1>Flyer Pipeline</h1>
+      <p>Master in &rarr; every size out · brand v<span id="brandVer">11</span></p>
+    </div>
+    <span id="driveBadge" class="badge badge-unknown">Drive: checking…</span>
+  </header>
+
+  <main>
+    <!-- INPUT -->
+    <section class="panel" id="inputPanel">
+      <div class="grid2">
+        <label class="field">Template / event name
+          <input id="template" type="text" placeholder="Summer Camp Week 1" autocomplete="off" />
+        </label>
+        <label class="field">Month <span class="muted">(Drive filing)</span>
+          <input id="month" type="month" />
+        </label>
+      </div>
+
+      <fieldset class="families">
+        <legend>Families to generate</legend>
+        <label class="chk"><input type="checkbox" id="famA" checked /> <b>Style A</b> — Text-Rich <span class="muted">organic · 7 sizes</span></label>
+        <label class="chk"><input type="checkbox" id="famALite" checked /> <b>Style A-Lite</b> — Photo-Dominant <span class="muted">paid · 4 sizes</span></label>
+        <label class="chk"><input type="checkbox" id="famB" /> <b>Style B</b> — Hype <span class="muted">organic · 7 sizes</span></label>
+      </fieldset>
+
+      <div class="masters" id="masters">
+        <!-- dropzones injected by app.js -->
+      </div>
+
+      <button id="generateBtn" class="primary big">Generate all sizes</button>
+      <p class="hint">Drop the Ideogram-approved <b>4:5 master(s)</b>. The tool derives every distribution size, builds Meta &amp; PMax bundles, and can file everything to Drive. No master is altered — derivation only.</p>
+    </section>
+
+    <!-- RESULTS -->
+    <section class="panel hidden" id="resultsPanel">
+      <div id="summary" class="summary"></div>
+      <div id="warnings"></div>
+
+      <div class="resultsbar">
+        <div class="tabs">
+          <button class="tab active" data-tab="organic">Organic <span id="cntOrganic" class="pill">0</span></button>
+          <button class="tab" data-tab="paid">Paid <span id="cntPaid" class="pill">0</span></button>
+        </div>
+        <div class="actions">
+          <button id="dlAll" class="ghost">⬇ Download all</button>
+          <button id="dlMeta" class="ghost">⬇ Meta bundle</button>
+          <button id="dlPmax" class="ghost">⬇ PMax bundle</button>
+          <button id="saveDrive" class="primary">☁ Save all to Drive</button>
+        </div>
+      </div>
+
+      <div id="grid" class="grid"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- tile template -->
+  <template id="tileTpl">
+    <div class="tile">
+      <div class="thumb"><img alt="" /></div>
+      <div class="tile-meta">
+        <span class="tile-label"></span>
+        <span class="tile-dims muted"></span>
+      </div>
+      <div class="tile-row">
+        <div class="seg" role="group" aria-label="crop mode">
+          <button class="seg-btn" data-policy="letterbox">Fit</button>
+          <button class="seg-btn" data-policy="smart">Fill</button>
+        </div>
+        <button class="dl-one ghost sm">⬇</button>
+      </div>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>

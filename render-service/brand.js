@@ -1,39 +1,50 @@
-// Danzversity Flyer Maker — Brand Tokens
+// Danzversity Flyer Maker — Brand Tokens & Distribution Model
 //
-// SINGLE SOURCE OF TRUTH for palette, fonts, accents, and style routing.
-// All templates + render utilities import from here. Never hard-code a hex in a template.
+// SINGLE SOURCE OF TRUTH for palette, fonts, families, the size matrix, and
+// the paid/organic distribution rules. resize.js, bundle.js, gdrive.js and
+// server.js all import from here. Never hard-code a hex, a pixel size, or a
+// bundle definition anywhere else.
 //
 // Anchored to live https://danzversity.com/assets/css/danzversity.css (verified 2026-05-27)
-// and Flyer Design Standard v8 (Confluence MS page 472809473).
+// and Flyer Design Standard v11 (Confluence MS page 472809473).
 //
-// To verify alignment with live CSS, run: node scripts/verify-brand.js
-// To update: edit values here, bump VERSION, then re-run verify + regenerate plates if palette changed.
+// ── What this tool is (v11 reality) ──────────────────────────────────────────
+// This is NOT the old 11-layer neon compositing engine. The v11 brand RETIRED
+// that aesthetic (text glow / neon / decorative graphics around the photo are
+// now in Ideogram's negative prompt). The approved master is produced in
+// Ideogram by a human (brand-approved). THIS TOOL takes that master and does
+// the repetitive, hours-eating downstream work: derive every distribution size,
+// trim the paid family, package Meta/PMax bundles, file into Drive, push site
+// cards. Master in → everything out.
 
-const VERSION = '8.0.0'; // matches Flyer Design Standard v8
+const VERSION = '11.0.0'; // tracks Flyer Design Standard v11
 
 // ---------------------------------------------------------------------------
-// Core palette — Style A default (locked in v8)
+// Core palette — locked, verified from production CSS (v11)
 // ---------------------------------------------------------------------------
 const palette = {
-  gold:           '#FFD700', // headlines, CTA pills, neon glow
-  black:          '#000000', // backgrounds, base canvas
-  textPrimary:    '#FFFFFF', // body text, info block
-  textSecondary:  '#888888', // muted/secondary text
-  textMuted:      '#555555', // very muted (rarely used in flyers)
-  red:            '#E74C3C', // RESERVED — errors / DO NOT USE on flyers as decorative
+  gold:          '#FFD700', // headlines, accents, CTA — THE brand color
+  black:         '#000000', // page background, canvas base, letterbox fill
+  textPrimary:   '#FFFFFF', // body text
+  textSecondary: '#888888', // muted/subhead
+  textMuted:     '#555555', // fine print
+  red:           '#E74C3C', // RESERVED — errors / extreme urgency only. NEVER decorative.
 };
 
+// Letterbox / canvas fill is always pure brand black, which makes padding
+// invisible against the brand and lossless for text-rich masters.
+const LETTERBOX_FILL = { r: 0, g: 0, b: 0, alpha: 1 };
+
 // ---------------------------------------------------------------------------
-// Program accent stripes — used sparingly (1-2px stripes above/below info bar)
-// Only applies when a template explicitly defines an accent.
+// Program accents — used sparingly as thin stripes/badges, never replacing gold
 // ---------------------------------------------------------------------------
 const accents = {
   youth:      '#4472C4', // youth-blue (Root Runners, Flow Finders, Vibe Builders, Elementz Crew)
-  adult:      '#FFD700', // gold (same as primary — no visible stripe)
-  collective: '#9C27B0', // collective-purple ((You)nity Night, Off The Grid, Family events)
+  adult:      '#FFD700', // gold (same as primary)
+  collective: '#9C27B0', // collective-purple ((You)nity Nights, family events)
   camps:      '#FF5722', // camps-orange (Summer Camp, Spring Break Camp)
-  trial:      '#FF9800', // trial-orange (rarely used on flyers)
-  // Elemental Dance Method tokens — for future curriculum-specific flyers
+  trial:      '#FF9800', // trial-orange
+  // Elemental Dance Method curriculum tokens
   earth:      '#4CAF50',
   water:      '#2196F3',
   air:        '#87CEEB',
@@ -41,110 +52,155 @@ const accents = {
 };
 
 // ---------------------------------------------------------------------------
-// Typography
+// Typography (locked) — informational. This tool does not render text;
+// Ideogram bakes it into the master. Kept here as the brand record.
 // ---------------------------------------------------------------------------
 const fonts = {
-  heading: {
-    family: 'Bebas Neue',
-    path:   'fonts/BebasNeue-Regular.ttf',
-    fallback: 'sans-serif',
+  heading: { family: 'Bebas Neue', note: 'condensed all-caps; site headline font' },
+  body:    { family: 'Inter', note: 'paragraphs + small text' },
+};
+
+// ---------------------------------------------------------------------------
+// Creative families (Flyer Design Standard v11, Standing Rule 4)
+//   channel    — where it runs (drives which size set + Drive bucket)
+//   cropPolicy — how downstream sizes are derived from the master:
+//                'letterbox' = pad onto black, lossless (safe for text-rich)
+//                'smart'     = fill-crop with focal bias (photo-dominant)
+// ---------------------------------------------------------------------------
+const families = {
+  'A': {
+    key: 'A',
+    label: 'Style A — Text-Rich (organic)',
+    channel: 'organic',
+    cropPolicy: 'letterbox', // text lives on the image; never crop it off
+    textCoverage: '35-40%',
+    photoCoverage: '45-50%',
   },
-  body: {
-    family: 'Inter',
-    weights: {
-      regular:  { path: 'fonts/Inter-Regular.ttf',  weight: 400 },
-      medium:   { path: 'fonts/Inter-Medium.ttf',   weight: 500 },
-      semibold: { path: 'fonts/Inter-SemiBold.ttf', weight: 600 },
-      bold:     { path: 'fonts/Inter-Bold.ttf',     weight: 700 },
-    },
-    fallback: '-apple-system, BlinkMacSystemFont, sans-serif',
+  'A-Lite': {
+    key: 'A-Lite',
+    label: 'Style A-Lite — Photo-Dominant (paid)',
+    channel: 'paid',
+    cropPolicy: 'smart', // photo dominates; minimal text sits in a bottom safe-area
+    textCoverage: '15-18%',
+    photoCoverage: '65-70%',
+  },
+  'B': {
+    key: 'B',
+    label: 'Style B — Hype (battles, name-talent, (You)nity Nights)',
+    channel: 'organic',
+    cropPolicy: 'letterbox',
+    textCoverage: '40-50%',
+    photoCoverage: 'varies',
   },
 };
 
 // ---------------------------------------------------------------------------
-// Style routing — every template picks Style A (default) or Style B (hype)
-// ---------------------------------------------------------------------------
-const styles = {
-  // Style A: photo-led, calm, default (anchored to Tony-approved Summer Camp Week 1 black flyer 5/26)
-  A: {
-    name: 'Style A — Photo-led (default)',
-    background: 'plate', // pulls from backgrounds/style-a/plate-{1..4}.png
-    plateDir: 'backgrounds/style-a',
-    titleColor: palette.gold,
-    subtitleStroke: palette.textPrimary, // white outline
-    pillFill: palette.gold,
-    pillText: palette.black,
-    bodyText: palette.textPrimary,
-    infoText: palette.textSecondary,
-    photoGlowColor: palette.gold,
-    photoColorGradeBlend: 0.18, // 15-22% per render spec
-    photoContrast: 1.15,
-    backgroundDarken: 0.28,
-    topVignette: true,
-  },
-  // Style B: hype, Pavel-style — typography-dominant, graphic noise, urban warehouse vibe
-  B: {
-    name: 'Style B — Hype (Pavel-style)',
-    background: 'plate',
-    plateDir: 'backgrounds/style-b', // optional — falls back to style-a if missing
-    plateFallback: 'backgrounds/style-a',
-    titleColor: palette.gold,
-    subtitleStroke: palette.gold, // gold outline (vs white on Style A)
-    pillFill: palette.gold,
-    pillText: palette.black,
-    pillTexture: 'spray-paint',
-    bodyText: palette.textPrimary,
-    infoText: palette.textSecondary,
-    photoGlowColor: palette.gold,
-    photoColorGradeBlend: 0.22,
-    photoContrast: 1.18,
-    backgroundDarken: 0.32,
-    topVignette: true,
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Output sizes — all 7 built from day one
+// Size matrix (v11) — 8 sizes. `master` flags the three ratios best generated
+// directly in Ideogram (the 3-pass workflow); the tool can still derive them.
+// `safeArea` (smart-crop families) reserves a fraction of canvas height at the
+// named edge so baked text isn't cropped out.
 // ---------------------------------------------------------------------------
 const sizes = {
-  '4x5':       { name: '4:5 portrait',    width: 1080, height: 1350, useCase: 'IG/FB feed (master)' },
-  '1x1':       { name: '1:1 square',      width: 1080, height: 1080, useCase: 'IG/FB feed, Nextdoor' },
-  '9x16':      { name: '9:16 story',      width: 1080, height: 1920, useCase: 'IG/FB Stories, TikTok, Reels' },
-  '16x9':      { name: '16:9 landscape',  width: 1920, height: 1005, useCase: 'FB event covers, program page heroes' },
-  '4x3':       { name: '4:3',             width: 1200, height:  900, useCase: 'GBP post images' },
-  '2x1':       { name: '2:1 banner',      width:  600, height:  300, useCase: 'Brevo email headers' },
-  'site-card': { name: '1.75:1 site card', width: 560, height:  320, useCase: '/collective offering cards' },
+  '4x5':       { key: '4x5',       label: '4:5 portrait',     w: 1080, h: 1350, master: true,  useCase: 'IG/FB feed — the master' },
+  '1x1':       { key: '1x1',       label: '1:1 square',       w: 1080, h: 1080, master: true,  useCase: 'IG/FB feed, Nextdoor, PMax square' },
+  '9x16':      { key: '9x16',      label: '9:16 story',       w: 1080, h: 1920, master: true,  useCase: 'Stories, Reels, TikTok' },
+  '16x9':      { key: '16x9',      label: '16:9 landscape',   w: 1920, h: 1005, master: false, useCase: 'FB event cover, program page hero' },
+  '4x3':       { key: '4x3',       label: '4:3',              w: 1200, h:  900, master: false, useCase: 'GBP post image' },
+  '2x1':       { key: '2x1',       label: '2:1 email banner', w:  600, h:  300, master: false, useCase: 'Brevo email header' },
+  'site-card': { key: 'site-card', label: '1.75:1 site card', w:  560, h:  320, master: false, useCase: '/collective offering card' },
+  '1.91x1':    { key: '1.91x1',    label: '1.91:1 landscape', w: 1200, h:  628, master: false, useCase: 'Google PMax / Display landscape (paid)' },
 };
 
-const SIZE_KEYS = Object.keys(sizes);
+// Which sizes each channel ships.
+const ORGANIC_SIZES = ['4x5', '1x1', '9x16', '16x9', '4x3', '2x1', 'site-card']; // 7
+const PAID_SIZES    = ['4x5', '1x1', '9x16', '1.91x1'];                          // 4
+
+// Per-family size set. Style B is organic-only (name-talent events skip paid).
+const FAMILY_SIZES = {
+  'A':      ORGANIC_SIZES,
+  'A-Lite': PAID_SIZES,
+  'B':      ORGANIC_SIZES,
+};
+
+// For smart-crop families, reserve this fraction of height at the bottom edge
+// (where Style A-Lite's 3 text lines + gold accent bar live) so fill-crops of
+// wide ratios don't slice the logo/headline/URL off.
+const SMART_CROP_BOTTOM_SAFE = 0.28;
+const SMART_CROP_TOP_SAFE    = 0.10; // small logo sits at top
 
 // ---------------------------------------------------------------------------
-// Neon glow recipe — locked from POC validation (April 10, 2026)
+// Upload-ready bundles (v11) — both pull from the Style A-Lite paid family.
+//   Meta paid placements: 4:5 + 1:1 + 9:16
+//   Google PMax: square + portrait + landscape (we ship 4:5/1:1/9:16/1.91:1)
 // ---------------------------------------------------------------------------
-const neonGlow = {
-  solid:   { passes: [{ blur: 30, intensity: 2.0 }, { blur: 12, intensity: 1.0 }, { blur: 4, intensity: 1.0 }] },
-  outline: { passes: [{ blur: 25, intensity: 2.0 }, { blur:  8, intensity: 1.0 }], strokeWidth: 3 },
+const bundles = {
+  meta: { key: 'meta', label: 'Meta paid bundle', family: 'A-Lite', sizes: ['4x5', '1x1', '9x16'] },
+  pmax: { key: 'pmax', label: 'Google PMax bundle', family: 'A-Lite', sizes: ['4x5', '1x1', '9x16', '1.91x1'] },
 };
 
 // ---------------------------------------------------------------------------
-// Standard footer + address (used on every flyer)
+// Distribution / address reference (v11). The tool does not render text — these
+// are the canonical strings the master should already carry, kept for docs.
 // ---------------------------------------------------------------------------
-const footer = {
-  registerLine: 'REGISTER ONLINE @ DANZVERSITY.COM',
-  address: 'DANZVERSITY — 7531 BURNET RD. 78757',
+const brandRef = {
+  url: 'DANZVERSITY.COM',
+  addressStacked: ['7531 BURNET RD', 'AUSTIN, TX 78757'],
+  addressCompact: '7531 BURNET RD, AUSTIN TX',
 };
 
 // ---------------------------------------------------------------------------
-// Public API
+// Google Drive layout — FLYERS/{Template}/{YYYY-MM}/{Organic|Paid}/
 // ---------------------------------------------------------------------------
+const DRIVE_ROOT = 'FLYERS';
+function driveBucket(channel) {
+  return channel === 'paid' ? 'Paid' : 'Organic';
+}
+function drivePathSegments(template, yyyymm, channel) {
+  return [DRIVE_ROOT, template, yyyymm, driveBucket(channel)];
+}
+
+// ---------------------------------------------------------------------------
+// RETIRED in v11 (kept as an intentional record, not for use):
+//   The old neon-glow recipe (3-pass gaussian text glow), audio-waveform bars,
+//   instructor ovals, pill banners, per-template color routing (blue/orange/
+//   gold-green/purple) and Remove.bg cutout compositing. The brand moved to a
+//   minimalist photo-led look; those decorative elements are now negative-
+//   prompted in Ideogram. Do not reintroduce them into this pipeline.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function sizesForFamily(familyKey) {
+  return (FAMILY_SIZES[familyKey] || []).map((k) => sizes[k]);
+}
+function cropPolicyFor(familyKey) {
+  return (families[familyKey] || {}).cropPolicy || 'letterbox';
+}
+function channelFor(familyKey) {
+  return (families[familyKey] || {}).channel || 'organic';
+}
+
 module.exports = {
   VERSION,
   palette,
   accents,
   fonts,
-  styles,
+  LETTERBOX_FILL,
+  families,
   sizes,
-  SIZE_KEYS,
-  neonGlow,
-  footer,
+  ORGANIC_SIZES,
+  PAID_SIZES,
+  FAMILY_SIZES,
+  SMART_CROP_BOTTOM_SAFE,
+  SMART_CROP_TOP_SAFE,
+  bundles,
+  brandRef,
+  DRIVE_ROOT,
+  driveBucket,
+  drivePathSegments,
+  // helpers
+  sizesForFamily,
+  cropPolicyFor,
+  channelFor,
 };

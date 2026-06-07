@@ -1,0 +1,33 @@
+# Render.com deployment — single-origin service.
+# Serves the frontend (express.static) AND the API from one host, so there is no
+# CORS to manage. Point flyers.danzversity.com at this service.
+#
+# Set the secret env vars (GOOGLE_SERVICE_ACCOUNT, FLYERS_*) in the Render
+# dashboard — they are marked sync:false so they are never committed.
+
+services:
+  - type: web
+    name: danzversity-flyers
+    runtime: node
+    plan: starter            # ~$7/mo, 512MB — enough for Sharp
+    region: oregon
+    branch: main
+    buildCommand: npm install
+    startCommand: node render-service/server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PORT
+        value: "10000"       # Render injects PORT; server honors it
+      - key: CORS_ORIGIN
+        value: https://flyers.danzversity.com
+      - key: GOOGLE_SERVICE_ACCOUNT
+        sync: false           # paste service-account JSON in dashboard
+      - key: FLYERS_ROOT_FOLDER_ID
+        sync: false           # shared Drive FLYERS folder id
+      - key: FLYERS_USER
+        sync: false           # basic-auth user (optional)
+      - key: FLYERS_PASSWORD
+        sync: false           # basic-auth password — set to enable the gate
