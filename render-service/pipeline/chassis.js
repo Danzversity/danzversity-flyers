@@ -136,12 +136,14 @@ async function compose(o) {
 
   let base = sharp(o.background).resize(W, H, { fit: 'cover', position: sharp.strategy.attention }).flatten({ background: brand.LETTERBOX_FILL });
 
-  // Person cutout — bigger + higher for paid (photo-dominant); skipped for testimonial.
+  // Person cutout — fit WITHIN the canvas (cap both height AND width) so a wide or
+  // large real photo can never overflow the composite. Bigger + higher for paid.
   if (o.person && layout !== 'testimonial') {
     const ph = Math.round(H * (layout === 'A-Lite' ? 0.70 : 0.60));
-    const personBuf = await sharp(o.person).resize({ height: ph }).png().toBuffer();
+    const maxW = Math.round(W * 0.94);
+    const personBuf = await sharp(o.person).resize({ height: ph, width: maxW, fit: 'inside' }).png().toBuffer();
     const pm = await sharp(personBuf).metadata();
-    const top = layout === 'A-Lite' ? Math.round(H * 0.13) : (H - ph - Math.round(H * 0.06));
+    const top = layout === 'A-Lite' ? Math.round(H * 0.13) : (H - pm.height - Math.round(H * 0.06));
     layers.push({ input: personBuf, top, left: Math.round((W - pm.width) / 2) });
   }
 

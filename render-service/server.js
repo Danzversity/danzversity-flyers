@@ -265,6 +265,7 @@ app.post('/compose', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'bac
       counts: { total: images.length }, renderMs: Date.now() - t0, images,
     });
   } catch (e) {
+    console.error('/compose error:', e.stack || e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
