@@ -25,8 +25,11 @@ const templates = require('./templates');
 const { deriveFamily, deriveSize, slugify, masterMeta } = require('./pipeline/derive');
 const { buildBundle } = require('./pipeline/bundle');
 const { assemble, verifyUrl } = require('./pipeline/prompt');
+const { composeFlyer } = require('./pipeline/flyer');
+const library = require('./pipeline/library');
 const gdrive = require('./integrations/gdrive');
 const ideogram = require('./integrations/ideogram');
+const removebg = require('./integrations/removebg');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -111,6 +114,8 @@ app.get('/health', (req, res) => {
     brandVersion: brand.VERSION,
     driveConfigured: gdrive.isConfigured(),
     ideogramConfigured: ideogram.isConfigured(),
+    removebgConfigured: removebg.isConfigured(),
+    library: library.status(),
     templateCount: templates.TEMPLATES.length,
     families: Object.values(brand.families).map((f) => ({ key: f.key, label: f.label, channel: f.channel })),
     sizes: Object.values(brand.sizes).map((s) => ({ key: s.key, label: s.label, w: s.w, h: s.h })),
@@ -173,6 +178,69 @@ app.get('/verify-url', async (req, res) => {
   const u = req.query.u;
   if (!u) return res.status(400).json({ ok: false, error: '?u= required' });
   res.json({ ok: true, ...(await verifyUrl(String(u))) });
+});
+
+// ── COMPOSE (hybrid model: library background + real photo + code chassis) ────
+app.get('/backgrounds', async (req, res) => {
+  try { res.json({ ok: true, source: library.status().backgrounds, items: await library.list('backgrounds') }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/people', async (req, res) => {
+  try { res.json({ ok: true, source: library.status().people, items: await library.list('people') }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/upload-background', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'file required' });
+    res.json({ ok: true, ...(await library.upload('backgrounds', req.file.originalname || `bg-${Date.now()}.png`, req.file.buffer, req.file.mimetype || 'image/png')) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/upload-person', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'file required' });
+    res.json({ ok: true, ...(await library.upload('people', req.file.originalname || `person-${Date.now()}.png`, req.file.buffer, req.file.mimetype || 'image/png')) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Compose a flyer: library background + (uploaded or library) person + chassis → all sizes.
+app.post('/compose', upload.fields([{ name: 'photo', maxCount: 1 }]), async (req, res) => {
+  const t0 = Date.now();
+  try {
+    const templateKey = req.body.templateKey;
+    if (!templateKey) return res.status(400).json({ ok: false, error: 'templateKey required' });
+    if (!req.body.backgroundId) return res.status(400).json({ ok: false, error: 'backgroundId required' });
+
+    let content = {};
+    if (req.body.content) { try { content = JSON.parse(req.body.content); } catch (_) { return res.status(400).json({ ok: false, error: 'content must be JSON' }); } }
+
+    const background = await library.get('backgrounds', req.body.backgroundId);
+
+    let person = null;
+    const uploaded = req.files && req.files.photo && req.files.photo[0];
+    if (uploaded) {
+      person = await removebg.cutoutCached(uploaded.buffer);
+      if (req.body.savePhoto === 'true') {
+        try { await library.upload('people', uploaded.originalname || `photo-${Date.now()}.png`, uploaded.buffer, uploaded.mimetype || 'image/png'); } catch (_) { /* non-fatal */ }
+      }
+    } else if (req.body.personId) {
+      person = await removebg.cutoutCached(await library.get('people', req.body.personId));
+    }
+
+    const result = await composeFlyer({ templateKey, content, background, person, slug: req.body.slug || content.title });
+    const images = result.images.map((i) => ({
+      family: i.family, channel: i.channel, sizeKey: i.sizeKey, label: i.label,
+      filename: i.filename, width: i.width, height: i.height, native: i.native, bytes: i.bytes,
+      base64: i.buffer.toString('base64'),
+    }));
+
+    res.json({
+      ok: true, templateKey, family: result.family, channel: result.channel, slug: result.slug, layout: result.layout,
+      month: content.month || '', driveConfigured: gdrive.isConfigured(),
+      counts: { total: images.length }, renderMs: Date.now() - t0, images,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 const processUpload = upload.fields([

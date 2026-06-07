@@ -119,4 +119,35 @@ async function saveImages(template, yyyymm, images) {
   return { results, savedCount: results.filter((r) => r.success).length };
 }
 
-module.exports = { isConfigured, saveImages };
+// ── Library helpers (backgrounds / people folders) ───────────────────────────
+async function listImages(folderId) {
+  const drive = await getDrive();
+  const res = await drive.files.list({
+    q: `'${folderId}' in parents and mimeType contains 'image/' and trashed=false`,
+    fields: 'files(id,name,mimeType,thumbnailLink,modifiedTime)',
+    orderBy: 'modifiedTime desc',
+    pageSize: 100,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
+  return res.data.files || [];
+}
+
+async function downloadFile(fileId) {
+  const drive = await getDrive();
+  const res = await drive.files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
+  return Buffer.from(res.data);
+}
+
+async function uploadImage(folderId, name, buffer, mimeType = 'image/png') {
+  const drive = await getDrive();
+  const res = await drive.files.create({
+    requestBody: { name, parents: [folderId] },
+    media: { mimeType, body: Readable.from(buffer) },
+    fields: 'id,name,webViewLink',
+    supportsAllDrives: true,
+  });
+  return res.data;
+}
+
+module.exports = { isConfigured, saveImages, listImages, downloadFile, uploadImage };
