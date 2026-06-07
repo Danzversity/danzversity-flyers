@@ -26,8 +26,8 @@ function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').repla
 
 function defs(topH, botStart) {
   return `<defs>
-    <linearGradient id="ts" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0.85"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
-    <linearGradient id="bs" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0.92"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
+    <linearGradient id="ts" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0.9"/><stop offset="0.6" stop-color="#000" stop-opacity="0.4"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
+    <linearGradient id="bs" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0.97"/><stop offset="0.5" stop-color="#000" stop-opacity="0.82"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
     <style>@font-face{font-family:'Bebas Neue';src:url(data:font/ttf;base64,${fontB64()}) format('truetype');}text{font-family:'Bebas Neue',sans-serif;}</style>
   </defs>
   <rect x="0" y="0" width="100%" height="${topH}" fill="url(#ts)"/>
@@ -45,7 +45,7 @@ function wrapWords(s, maxChars) {
 // ── Style A (standard) — also drives Style B via opts ────────────────────────
 function svgStyleA(W, H, spec, opts = {}) {
   const cx = W / 2, F = (f) => Math.round(H * f);
-  const topH = F(opts.scrimTop || 0.34), botStart = F(0.58);
+  const topH = F(opts.scrimTop || 0.34), botStart = F(0.55);
   const t = (s, y, size, fill, o = {}) => `<text x="${o.x || cx}" y="${y}" font-size="${size}" fill="${fill}" text-anchor="middle" letter-spacing="${o.ls || 1}">${esc(s)}</text>`;
   const L = [`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`, defs(topH, botStart)];
 

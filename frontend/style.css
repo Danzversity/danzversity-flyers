@@ -166,6 +166,10 @@ select:focus { outline: none; border-color: var(--gold); }
 .kv { font-size: 12.5px; color: var(--muted); margin: 6px 0 4px; }
 .kv b { color: var(--text); }
 
+/* Mode toggle */
+.moderow { display: flex; align-items: center; gap: 12px; margin: 16px 0 4px; flex-wrap: wrap; }
+.moderow .seg-btn { padding: 8px 16px; font-size: 13px; }
+
 /* Pickers (background / people) */
 .picker-block { margin: 18px 0; }
 .picker-head { display: flex; align-items: center; gap: 12px; margin-bottom: 9px; font-size: 13px; font-weight: 700; color: var(--muted); }

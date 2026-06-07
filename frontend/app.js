@@ -11,7 +11,7 @@ const FAMILIES = [
 ];
 
 const state = { files: { 'A': null, 'A-Lite': null, 'B': null }, images: [], template: '', month: '', slug: '', driveConfigured: false, activeTab: 'organic' };
-const create = { templates: [], backgrounds: [], people: [], selectedBg: null, bgFile: null, selectedPersonId: null, photoFile: null };
+const create = { templates: [], backgrounds: [], people: [], selectedBg: null, bgFile: null, selectedPersonId: null, photoFile: null, mode: 'photo' };
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -63,6 +63,8 @@ async function initCreate() {
   $('bgInput').addEventListener('change', onUploadBg);
   $('addPhotoBtn').addEventListener('click', () => $('photoInput').click());
   $('photoInput').addEventListener('change', onPickPhoto);
+  document.querySelectorAll('#modeToggle .seg-btn').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  setMode('photo');
   onTemplateChange();
   loadLibraries();
 }
@@ -131,6 +133,14 @@ function onUploadBg() {
   renderBgPicker();
 }
 
+function setMode(m) {
+  create.mode = m === 'plate' ? 'plate' : 'photo';
+  document.querySelectorAll('#modeToggle .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === create.mode));
+  $('modeHint').textContent = create.mode === 'photo'
+    ? 'Your photo becomes the whole flyer. (The background library is for cut-out mode.)'
+    : 'Your photo is cut out and placed on the chosen background (needs Remove.bg for a clean edge).';
+}
+
 function renderPeoplePicker() {
   const host = $('peoplePicker'); host.innerHTML = '';
   const none = el('div', 'thumb-item none' + (!create.selectedPersonId && !create.photoFile ? ' sel' : '')); none.textContent = 'None';
@@ -158,14 +168,19 @@ async function onCompose() {
   const content = collectContent();
   const missing = t.fields.filter((fld) => fld.required && !content[fld.name]);
   if (missing.length) return toast('Fill required: ' + missing.map((m) => m.label).join(', '), 'err');
-  if (!create.selectedBg && !create.bgFile) return toast('Pick or upload a background.', 'err');
+  if (create.mode === 'photo') {
+    if (!create.photoFile && !create.selectedPersonId) return toast('Full-bleed: upload or pick a photo.', 'err');
+  } else if (!create.selectedBg && !create.bgFile) {
+    return toast('Cut-out: pick or upload a background.', 'err');
+  }
 
   if (!$('qrToggle').checked) content.qr = false;
   const fd = new FormData();
   fd.append('templateKey', t.key);
   fd.append('content', JSON.stringify(content));
+  fd.append('mode', create.mode);
   if (create.bgFile) { fd.append('background', create.bgFile); if ($('saveBg').checked) fd.append('saveBg', 'true'); }
-  else fd.append('backgroundId', create.selectedBg);
+  else if (create.selectedBg) fd.append('backgroundId', create.selectedBg);
   if (create.photoFile) { fd.append('photo', create.photoFile); if ($('savePhoto').checked) fd.append('savePhoto', 'true'); }
   else if (create.selectedPersonId) fd.append('personId', create.selectedPersonId);
 

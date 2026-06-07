@@ -226,27 +226,37 @@ app.post('/compose', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'bac
     let content = {};
     if (req.body.content) { try { content = JSON.parse(req.body.content); } catch (_) { return res.status(400).json({ ok: false, error: 'content must be JSON' }); } }
 
-    // Background: a direct upload (optionally saved to the library) OR a library id.
-    let background;
-    const bgUp = req.files && req.files.background && req.files.background[0];
-    if (bgUp) {
-      background = bgUp.buffer;
-      if (req.body.saveBg === 'true') { try { await library.upload('backgrounds', bgUp.originalname || `bg-${Date.now()}.png`, bgUp.buffer, bgUp.mimetype || 'image/png'); } catch (_) { /* non-fatal */ } }
-    } else if (req.body.backgroundId) {
-      background = await library.get('backgrounds', req.body.backgroundId);
-    } else {
-      return res.status(400).json({ ok: false, error: 'upload a background or pick a backgroundId' });
+    // mode: 'photo' = the photo fills the frame (full-bleed); 'plate' = cut-out person on a background plate.
+    const mode = req.body.mode === 'plate' ? 'plate' : 'photo';
+
+    // Gather the photo (uploaded, optionally saved to library, OR a library person).
+    let photoBuf = null;
+    const photoUp = req.files && req.files.photo && req.files.photo[0];
+    if (photoUp) {
+      photoBuf = photoUp.buffer;
+      if (req.body.savePhoto === 'true') { try { await library.upload('people', photoUp.originalname || `photo-${Date.now()}.png`, photoUp.buffer, photoUp.mimetype || 'image/png'); } catch (_) { /* non-fatal */ } }
+    } else if (req.body.personId) {
+      photoBuf = await library.get('people', req.body.personId);
     }
 
-    let person = null;
-    const uploaded = req.files && req.files.photo && req.files.photo[0];
-    if (uploaded) {
-      person = await removebg.cutoutCached(uploaded.buffer);
-      if (req.body.savePhoto === 'true') {
-        try { await library.upload('people', uploaded.originalname || `photo-${Date.now()}.png`, uploaded.buffer, uploaded.mimetype || 'image/png'); } catch (_) { /* non-fatal */ }
-      }
-    } else if (req.body.personId) {
-      person = await removebg.cutoutCached(await library.get('people', req.body.personId));
+    // Gather the background plate (uploaded, optionally saved, OR a library bg).
+    let plateBuf = null;
+    const bgUp = req.files && req.files.background && req.files.background[0];
+    if (bgUp) {
+      plateBuf = bgUp.buffer;
+      if (req.body.saveBg === 'true') { try { await library.upload('backgrounds', bgUp.originalname || `bg-${Date.now()}.png`, bgUp.buffer, bgUp.mimetype || 'image/png'); } catch (_) { /* non-fatal */ } }
+    } else if (req.body.backgroundId) {
+      plateBuf = await library.get('backgrounds', req.body.backgroundId);
+    }
+
+    let background, person = null;
+    if (mode === 'photo') {
+      if (!photoBuf) return res.status(400).json({ ok: false, error: 'Full-bleed mode needs a photo.' });
+      background = photoBuf; // the photo IS the background — no rectangle, no second plate
+    } else {
+      if (!plateBuf) return res.status(400).json({ ok: false, error: 'Cut-out mode needs a background plate.' });
+      background = plateBuf;
+      person = photoBuf ? await removebg.cutoutCached(photoBuf) : null; // cut the person out onto the plate
     }
 
     const result = await composeFlyer({ templateKey, content, background, person, slug: req.body.slug || content.title });
@@ -260,7 +270,7 @@ app.post('/compose', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'bac
     try { adCopy = assemble(templateKey, content).adCopy; } catch (_) { /* non-fatal */ }
 
     res.json({
-      ok: true, templateKey, family: result.family, channel: result.channel, slug: result.slug, layout: result.layout,
+      ok: true, templateKey, mode, family: result.family, channel: result.channel, slug: result.slug, layout: result.layout,
       month: content.month || '', driveConfigured: gdrive.isConfigured(), adCopy,
       counts: { total: images.length }, renderMs: Date.now() - t0, images,
     });
