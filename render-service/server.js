@@ -217,17 +217,26 @@ app.post('/upload-person', upload.single('file'), async (req, res) => {
 });
 
 // Compose a flyer: library background + (uploaded or library) person + chassis → all sizes.
-app.post('/compose', upload.fields([{ name: 'photo', maxCount: 1 }]), async (req, res) => {
+app.post('/compose', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'background', maxCount: 1 }]), async (req, res) => {
   const t0 = Date.now();
   try {
     const templateKey = req.body.templateKey;
     if (!templateKey) return res.status(400).json({ ok: false, error: 'templateKey required' });
-    if (!req.body.backgroundId) return res.status(400).json({ ok: false, error: 'backgroundId required' });
 
     let content = {};
     if (req.body.content) { try { content = JSON.parse(req.body.content); } catch (_) { return res.status(400).json({ ok: false, error: 'content must be JSON' }); } }
 
-    const background = await library.get('backgrounds', req.body.backgroundId);
+    // Background: a direct upload (optionally saved to the library) OR a library id.
+    let background;
+    const bgUp = req.files && req.files.background && req.files.background[0];
+    if (bgUp) {
+      background = bgUp.buffer;
+      if (req.body.saveBg === 'true') { try { await library.upload('backgrounds', bgUp.originalname || `bg-${Date.now()}.png`, bgUp.buffer, bgUp.mimetype || 'image/png'); } catch (_) { /* non-fatal */ } }
+    } else if (req.body.backgroundId) {
+      background = await library.get('backgrounds', req.body.backgroundId);
+    } else {
+      return res.status(400).json({ ok: false, error: 'upload a background or pick a backgroundId' });
+    }
 
     let person = null;
     const uploaded = req.files && req.files.photo && req.files.photo[0];

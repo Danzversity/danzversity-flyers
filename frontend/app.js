@@ -11,7 +11,7 @@ const FAMILIES = [
 ];
 
 const state = { files: { 'A': null, 'A-Lite': null, 'B': null }, images: [], template: '', month: '', slug: '', driveConfigured: false, activeTab: 'organic' };
-const create = { templates: [], backgrounds: [], people: [], selectedBg: null, selectedPersonId: null, photoFile: null };
+const create = { templates: [], backgrounds: [], people: [], selectedBg: null, bgFile: null, selectedPersonId: null, photoFile: null };
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -59,8 +59,8 @@ async function initCreate() {
   sel.addEventListener('change', onTemplateChange);
   $('ctaUrl').addEventListener('blur', () => checkUrl($('ctaUrl').value));
   $('composeBtn').addEventListener('click', onCompose);
-  $('addBgBtn').addEventListener('click', () => $('addBgInput').click());
-  $('addBgInput').addEventListener('change', onAddBackground);
+  $('uploadBgBtn').addEventListener('click', () => $('bgInput').click());
+  $('bgInput').addEventListener('change', onUploadBg);
   $('addPhotoBtn').addEventListener('click', () => $('photoInput').click());
   $('photoInput').addEventListener('change', onPickPhoto);
   onTemplateChange();
@@ -115,13 +115,20 @@ function thumb(kind, id) { return `${API}/thumb?kind=${kind}&id=${encodeURICompo
 
 function renderBgPicker() {
   const host = $('bgPicker'); host.innerHTML = '';
-  if (!create.backgrounds.length) { host.innerHTML = '<span class="muted">No backgrounds yet — click “+ Add background”.</span>'; return; }
+  if (!create.backgrounds.length) host.innerHTML = '<span class="muted">No saved backgrounds — upload one above, or add to the Drive library.</span>';
   create.backgrounds.forEach((b) => {
-    const d = el('div', 'thumb-item' + (create.selectedBg === b.id ? ' sel' : '')); d.title = b.name;
+    const d = el('div', 'thumb-item' + (create.selectedBg === b.id && !create.bgFile ? ' sel' : '')); d.title = b.name;
     d.innerHTML = `<img src="${thumb('backgrounds', b.id)}" alt="" loading="lazy">`;
-    d.addEventListener('click', () => { create.selectedBg = b.id; renderBgPicker(); });
+    d.addEventListener('click', () => { create.selectedBg = b.id; create.bgFile = null; $('bgChosen').textContent = ''; renderBgPicker(); });
     host.appendChild(d);
   });
+}
+
+function onUploadBg() {
+  const f = $('bgInput').files[0]; if (!f) return;
+  create.bgFile = f; create.selectedBg = null;
+  $('bgChosen').textContent = 'Using upload: ' + f.name + ($('saveBg').checked ? ' (will save to library)' : '');
+  renderBgPicker();
 }
 
 function renderPeoplePicker() {
@@ -144,30 +151,21 @@ function onPickPhoto() {
   renderPeoplePicker();
 }
 
-async function onAddBackground() {
-  const f = $('addBgInput').files[0]; if (!f) return;
-  toast('Uploading background…');
-  const fd = new FormData(); fd.append('file', f);
-  try {
-    const j = await (await fetch(`${API}/upload-background`, { method: 'POST', body: fd })).json();
-    if (!j.ok) throw new Error(j.error);
-    await loadLibraries(); create.selectedBg = j.id; renderBgPicker();
-    toast('Background added', 'ok');
-  } catch (e) { toast('Upload failed: ' + e.message, 'err'); }
-}
+// (direct background upload handled by onUploadBg; saved to library on compose if "save" is checked)
 
 async function onCompose() {
   const t = currentTemplate(); if (!t) return;
   const content = collectContent();
   const missing = t.fields.filter((fld) => fld.required && !content[fld.name]);
   if (missing.length) return toast('Fill required: ' + missing.map((m) => m.label).join(', '), 'err');
-  if (!create.selectedBg) return toast('Pick a background.', 'err');
+  if (!create.selectedBg && !create.bgFile) return toast('Pick or upload a background.', 'err');
 
   if (!$('qrToggle').checked) content.qr = false;
   const fd = new FormData();
   fd.append('templateKey', t.key);
   fd.append('content', JSON.stringify(content));
-  fd.append('backgroundId', create.selectedBg);
+  if (create.bgFile) { fd.append('background', create.bgFile); if ($('saveBg').checked) fd.append('saveBg', 'true'); }
+  else fd.append('backgroundId', create.selectedBg);
   if (create.photoFile) { fd.append('photo', create.photoFile); if ($('savePhoto').checked) fd.append('savePhoto', 'true'); }
   else if (create.selectedPersonId) fd.append('personId', create.selectedPersonId);
 

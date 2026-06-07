@@ -37,10 +37,12 @@
       <div class="picker-block">
         <div class="picker-head">
           <span>Background <span class="muted" id="bgSource"></span></span>
-          <button id="addBgBtn" class="ghost sm" type="button">+ Add background</button>
-          <input id="addBgInput" type="file" accept="image/*" hidden />
+          <label class="savechk"><input type="checkbox" id="saveBg" /> save upload to library</label>
+          <button id="uploadBgBtn" class="ghost sm" type="button">⬆ Upload background</button>
+          <input id="bgInput" type="file" accept="image/*" hidden />
         </div>
         <div id="bgPicker" class="thumbs">loading…</div>
+        <div id="bgChosen" class="muted"></div>
       </div>
 
       <div class="picker-block">
