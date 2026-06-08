@@ -42,7 +42,7 @@
         <span class="muted" id="modeHint"></span>
       </div>
 
-      <div class="picker-block">
+      <div class="picker-block" id="bgBlock">
         <div class="picker-head">
           <span>Background <span class="muted" id="bgSource"></span></span>
           <label class="savechk"><input type="checkbox" id="saveBg" /> save upload to library</label>
@@ -55,7 +55,7 @@
 
       <div class="picker-block">
         <div class="picker-head">
-          <span>Photo of real people <span class="muted">(optional)</span></span>
+          <span id="photoLabel">Photo of real people <span class="muted">(optional)</span></span>
           <label class="savechk"><input type="checkbox" id="savePhoto" /> save upload to library</label>
           <button id="addPhotoBtn" class="ghost sm" type="button">⬆ Upload photo</button>
           <input id="photoInput" type="file" accept="image/*" hidden />

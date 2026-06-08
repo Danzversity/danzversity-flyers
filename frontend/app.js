@@ -135,10 +135,16 @@ function onUploadBg() {
 
 function setMode(m) {
   create.mode = m === 'plate' ? 'plate' : 'photo';
+  const photoMode = create.mode === 'photo';
   document.querySelectorAll('#modeToggle .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === create.mode));
-  $('modeHint').textContent = create.mode === 'photo'
-    ? 'Your photo becomes the whole flyer. (The background library is for cut-out mode.)'
-    : 'Your photo is cut out and placed on the chosen background (needs Remove.bg for a clean edge).';
+  // The background picker only matters in cut-out mode — hide it in full-bleed.
+  $('bgBlock').classList.toggle('hidden', photoMode);
+  $('photoLabel').innerHTML = photoMode
+    ? 'Photo <span class="muted">(fills the whole flyer)</span>'
+    : 'Photo of real people <span class="muted">(cut out onto the background)</span>';
+  $('modeHint').textContent = photoMode
+    ? 'Your photo becomes the whole flyer — no separate background needed.'
+    : 'Your photo is cut out and placed on the background plate (needs Remove.bg for a clean edge).';
 }
 
 function renderPeoplePicker() {
