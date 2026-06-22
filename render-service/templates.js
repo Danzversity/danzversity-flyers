@@ -181,6 +181,7 @@ const TEMPLATES = [
       f('time', 'Day / time', 'MONDAYS 6PM', 'MONDAYS'),
       f('ages', 'Ages', 'AGES 8+', 'ALL AGES'),
       f('price', 'Price', '$160 / 8 WEEKS', '$160 / 8 WEEKS'),
+      f('urgency', 'Urgency', 'SPACE IS LIMITED', 'SPACE IS LIMITED'),
     ],
     body: 'A vivid, high-saturation photo of a b-boy in freeze pose in the studio. Dramatic lighting, rich color, high contrast. Danzversity teal graffiti logo at top center. The text "BREAKIN\' SERIES" in large Bebas Neue all-caps gold letters. Below that "8-WEEK PROGRAM" in white. The vibrant photo in the middle. A thin gold accent line. The text "{time}" in white. The text "{ages}" in white. The text "{price}" in gold. A gold pill button with "REGISTER NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/BREAKIN" and "7531 BURNET RD · AUSTIN, TX 78757".',
   },
@@ -209,6 +210,7 @@ const TEMPLATES = [
       f('instructor', 'Instructor', 'JAYMIE', '', true),
       f('datetime', 'Date | time', 'SAT JULY 12 | 2PM', '', true),
       f('price', 'Price', '$35', '$35'),
+      f('urgency', 'Urgency', 'SPACE IS LIMITED', 'SPACE IS LIMITED'),
     ],
     body: 'A vivid, high-saturation photo of dancers in the studio. Warm dramatic lighting. Danzversity teal graffiti logo at top center. The text "{name}" in large Bebas Neue all-caps gold letters. Below that "WITH {instructor}" in white. The vibrant photo in the middle. A thin gold accent line. The text "{datetime}" in white. The text "{price}" in gold. A gold pill button with "REGISTER NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM" and "7531 BURNET RD · AUSTIN, TX 78757".',
   },
@@ -220,6 +222,7 @@ const TEMPLATES = [
       f('instructor', 'Instructor', 'PAVEL', '', true),
       f('datetime', 'Date | time', 'SAT AUG 9 | 3PM', '', true),
       f('price', 'Price', '$50', '$50'),
+      f('urgency', 'Urgency', 'LIMITED SPOTS', 'LIMITED SPOTS'),
     ],
     body: 'The text "{name}" in large bold letters at top. Below that "WITH {instructor}" in gold. Dancer silhouette in spotlight. The text "{datetime}" in white. A gold pill with "{price}". A gold pill button with "REGISTER NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM" and "7531 BURNET RD · AUSTIN, TX 78757".',
   },
@@ -231,6 +234,7 @@ const TEMPLATES = [
     fields: [
       f('date', 'Date', 'SAT SEPT 20', '', true),
       f('entry', 'Entry fee', '$10 ENTRY', '$10 ENTRY'),
+      f('urgency', 'Urgency', 'LIMITED BRACKET', 'LIMITED BRACKET'),
     ],
     body: 'The text "DANCE BATTLE" in large bold aggressive letters at top with spray paint drip effects. Retro fighting game energy. Silhouettes of two dancers facing off in a cypher. The text "1V1 ALL STYLES" in white. The text "{date}" in white. A gold pill with "{entry}". The text "STEP IN THE CYPHER" in gold. At bottom, two lines of white small caps: "DANZVERSITY.COM" and "7531 BURNET RD · AUSTIN, TX 78757".',
   },
@@ -239,7 +243,7 @@ const TEMPLATES = [
   {
     key: 'couples', label: 'Couples Class', family: 'A', group: 'Events',
     defaultUrl: 'https://danzversity.com',
-    fields: [f('datetime', 'Date | time', 'FRI FEB 13 | 7PM', '', true), f('price', 'Price', '$40/COUPLE', '$40/COUPLE')],
+    fields: [f('datetime', 'Date | time', 'FRI FEB 13 | 7PM', '', true), f('price', 'Price', '$40/COUPLE', '$40/COUPLE'), f('urgency', 'Urgency', 'SPACE IS LIMITED', 'SPACE IS LIMITED')],
     body: 'A vivid, high-saturation photo of two dancers moving together. Warm romantic lighting. Danzversity teal graffiti logo at top center. The text "COUPLES DANCE NIGHT" in large Bebas Neue all-caps gold letters. Below that "NO EXPERIENCE REQUIRED" in white. The vibrant photo in the middle. A thin gold accent line. The text "{datetime}" in white. The text "{price}" in gold. A gold pill button with "BOOK YOUR SPOT" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM" and "7531 BURNET RD · AUSTIN, TX 78757".',
   },
 
@@ -252,6 +256,7 @@ const TEMPLATES = [
       f('datetime', 'Date | time', 'SUN AUG 24 | 1PM', '', true),
       f('ages', 'Ages', 'AGES 10-17', 'AGES 10-17'),
       f('commitment', 'Commitment', 'WEEKLY REHEARSALS', 'WEEKLY REHEARSALS'),
+      f('urgency', 'Urgency', 'LIMITED ROSTER SPOTS', 'LIMITED ROSTER SPOTS'),
     ],
     body: 'A vivid, dramatic photo with spotlight on empty dance floor. Rich color, high contrast. Danzversity teal graffiti logo at top center. The text "{team} AUDITIONS" in large Bebas Neue all-caps gold letters. The vibrant photo in the middle. A thin gold accent line. The text "{datetime}" in white. The text "{ages}" in white. The text "{commitment}" in white. A gold pill button with "SIGN UP" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/TEAMS" and "7531 BURNET RD · AUSTIN, TX 78757".',
   },
@@ -297,23 +302,26 @@ function expandContent(template, content) {
 // {tokens} are filled from form content. layout: 'A' (standard) | 'A-Lite' (paid,
 // minimal) | 'B' (hype) | 'testimonial' (quote-centric).
 const FOOTER_ADDRESS = '7531 BURNET RD · AUSTIN, TX 78757';
+// Shared proof eyebrow — both claims verified (10th year in 2026 + live 5.0★ Google).
+// Update the rating here if it ever moves off 5.0.
+const PROOF_KICKER = '10 YEARS · ★★★★★ ON GOOGLE';
 
 const CHASSIS = {
-  'summer-camp-evergreen': { layout: 'A', kicker: "AUSTIN'S HIP-HOP HOME · 10 YEARS", headline: 'HIP HOP SUMMER CAMP', subhead: '{dates}', tagline: '{benefit}', infoLines: ['{ages} · WITH {instructor}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/CAMPS', qr: true },
-  'summer-camp-perweek': { layout: 'A', kicker: "AUSTIN'S HIP-HOP HOME · 10 YEARS", headline: 'HIP HOP SUMMER CAMP', subhead: '{weekLine}', tagline: '{benefit}', infoLines: ['{ages} · WITH {instructor}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/CAMPS', qr: true },
+  'summer-camp-evergreen': { layout: 'A', kicker: PROOF_KICKER, headline: 'HIP HOP SUMMER CAMP', subhead: '{dates}', tagline: '{benefit}', infoLines: ['{ages} · WITH {instructor}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/CAMPS', qr: true },
+  'summer-camp-perweek': { layout: 'A', kicker: PROOF_KICKER, headline: 'HIP HOP SUMMER CAMP', subhead: '{weekLine}', tagline: '{benefit}', infoLines: ['{ages} · WITH {instructor}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/CAMPS', qr: true },
   'summer-camp-paid': { layout: 'A-Lite', headline: 'HIP HOP SUMMER CAMP', subhead: '{ages} · TAUGHT BY {instructor}', url: 'DANZVERSITY.COM/CAMPS', qr: false },
-  'youth-allages': { layout: 'A', headline: 'HIP HOP DANCE', subhead: '{ages}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['ROOT RUNNERS • FLOW FINDERS', 'VIBE BUILDERS • ELEMENTZ CREW'], cta: 'ENROLL NOW', url: 'DANZVERSITY.COM/YOUTH', qr: true },
+  'youth-allages': { layout: 'A', kicker: PROOF_KICKER, headline: 'HIP HOP DANCE', subhead: '{ages}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['ROOT RUNNERS • FLOW FINDERS', 'VIBE BUILDERS • ELEMENTZ CREW'], price: 'FIRST CLASS FREE', cta: 'ENROLL NOW', url: 'DANZVERSITY.COM/YOUTH', qr: true },
   'youth-paid': { layout: 'A-Lite', headline: 'HIP HOP DANCE CLASSES', subhead: '{ages} · TAUGHT BY {instructor}', url: 'DANZVERSITY.COM/YOUTH', qr: false },
-  'adult': { layout: 'A', headline: 'ADULT HIP HOP', subhead: 'NO EXPERIENCE NEEDED', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['FIRST CLASS FREE'], price: '{price}', cta: 'START YOUR JOURNEY', url: 'DANZVERSITY.COM/ADULTS', qr: true },
+  'adult': { layout: 'A', kicker: PROOF_KICKER, headline: 'ADULT HIP HOP', subhead: 'NO EXPERIENCE NEEDED', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['FIRST CLASS FREE'], price: '{price}', cta: 'START YOUR JOURNEY', url: 'DANZVERSITY.COM/ADULTS', qr: true },
   'adult-paid': { layout: 'A-Lite', headline: 'ADULT HIP HOP', subhead: 'FIRST CLASS FREE · NO EXPERIENCE NEEDED', url: 'DANZVERSITY.COM/ADULTS', qr: false },
-  'breakin': { layout: 'A', headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM', infoLines: ['{time}', '{ages}'], price: '{price}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/BREAKIN', qr: true },
+  'breakin': { layout: 'A', kicker: PROOF_KICKER, headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM', infoLines: ['{time}', '{ages}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/BREAKIN', qr: true },
   'breakin-paid': { layout: 'A-Lite', headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM · {time}', url: 'DANZVERSITY.COM/BREAKIN', qr: false },
-  'younity-nights': { layout: 'B', headline: '(YOU)NITY NIGHTS', subhead: 'FREE MONTHLY EVENT', tagline: "MORE THAN MOVES — IT'S CULTURE", infoLines: ['LIVE PERFORMANCES | WORKSHOPS | OPEN MIC', '{schedule}'], url: 'DANZVERSITY.COM', qr: true },
-  'workshop-internal': { layout: 'A', headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
-  'workshop-nametalent': { layout: 'B', headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
-  'battle': { layout: 'B', headline: 'DANCE BATTLE', subhead: '1V1 ALL STYLES', infoLines: ['{date}', '{entry}'], cta: 'STEP IN THE CYPHER', url: 'DANZVERSITY.COM', qr: true },
-  'couples': { layout: 'A', headline: 'COUPLES DANCE NIGHT', subhead: 'NO EXPERIENCE REQUIRED', infoLines: ['{datetime}'], price: '{price}', cta: 'BOOK YOUR SPOT', url: 'DANZVERSITY.COM', qr: true },
-  'team-audition': { layout: 'A', headline: '{team} AUDITIONS', infoLines: ['{datetime}', '{ages}', '{commitment}'], cta: 'SIGN UP', url: 'DANZVERSITY.COM/TEAMS', qr: true },
+  'younity-nights': { layout: 'B', kicker: PROOF_KICKER, headline: '(YOU)NITY NIGHTS', subhead: 'FREE MONTHLY EVENT', tagline: "MORE THAN MOVES — IT'S CULTURE", infoLines: ['LIVE PERFORMANCES | WORKSHOPS | OPEN MIC', '{schedule}'], url: 'DANZVERSITY.COM', qr: true },
+  'workshop-internal': { layout: 'A', kicker: PROOF_KICKER, headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
+  'workshop-nametalent': { layout: 'B', kicker: PROOF_KICKER, headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
+  'battle': { layout: 'B', kicker: PROOF_KICKER, headline: 'DANCE BATTLE', subhead: '1V1 ALL STYLES', infoLines: ['{date}', '{entry}'], urgency: '{urgency}', cta: 'STEP IN THE CYPHER', url: 'DANZVERSITY.COM', qr: true },
+  'couples': { layout: 'A', kicker: PROOF_KICKER, headline: 'COUPLES DANCE NIGHT', subhead: 'NO EXPERIENCE REQUIRED', infoLines: ['{datetime}'], price: '{price}', urgency: '{urgency}', cta: 'BOOK YOUR SPOT', url: 'DANZVERSITY.COM', qr: true },
+  'team-audition': { layout: 'A', kicker: PROOF_KICKER, headline: '{team} AUDITIONS', infoLines: ['{datetime}', '{ages}', '{commitment}'], urgency: '{urgency}', cta: 'SIGN UP', url: 'DANZVERSITY.COM/TEAMS', qr: true },
   'testimonial': { layout: 'testimonial', quote: '{quote}', keyword: '{keyword}', reviewer: '{reviewer}', url: 'DANZVERSITY.COM', qr: false },
 };
 
