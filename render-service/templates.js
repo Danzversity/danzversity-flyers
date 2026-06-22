@@ -110,9 +110,12 @@ const TEMPLATES = [
     key: 'summer-camp-evergreen', label: 'Summer Camp — Evergreen', family: 'A', group: 'Summer Camp',
     defaultUrl: 'https://danzversity.com/camps',
     fields: [
-      f('instructor', 'Instructor', 'JAYMIE OROZCO-HOWARD', 'JAYMIE OROZCO-HOWARD'),
-      f('ages', 'Ages / hours', 'AGES 7-12 | 9AM-3PM', 'AGES 7-12 | 9AM-3PM'),
-      f('price', 'Price', '$85/DAY | $395/WEEK', '$85/DAY | $395/WEEK'),
+      f('dates', 'Dates', 'JUNE 15–19 · WEEK 1', 'SUMMER 2026'),
+      f('benefit', 'Hook line', '5 DAYS · ONE CREW · FRIDAY SHOWCASE', '5 DAYS · ONE CREW · FRIDAY SHOWCASE'),
+      f('ages', 'Ages / hours', 'AGES 7-12 · 9AM-3PM', 'AGES 7-12 · 9AM-3PM'),
+      f('instructor', 'Instructor', 'JAYMIE', 'JAYMIE'),
+      f('price', 'Price / value', '$395/WEEK · DAY $85', '$395/WEEK · DAY $85'),
+      f('urgency', 'Urgency', 'ONLY 15 SPOTS A WEEK', 'ONLY 15 SPOTS A WEEK'),
     ],
     body: 'The central photo is a vivid, high-saturation shot of real Danzversity kids posed confidently against the studio\'s outdoor graffiti wall. Rich color in the graffiti — deep purples, bright pinks, vibrant teals, electric blues, splashes of orange. Warm natural sunlight on the kids. High contrast between the kids and the wall. Danzversity teal graffiti logo at top center. The text "HIP HOP SUMMER CAMP" in large Bebas Neue all-caps gold letters. Below that "SUMMER 2026" in white Bebas Neue. The vibrant photo in the middle. The text "MORE THAN MOVES — IT\'S CULTURE." in white below the photo. A thin gold accent line. The text "{ages}" in white. The text "TAUGHT BY {instructor}" in white. The text "FRIDAY SHOWCASE FOR FAMILIES" in white. The text "{price}" in gold. A gold pill button with "REGISTER NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/CAMPS" and "7531 BURNET RD · AUSTIN, TX 78757".',
   },
@@ -121,9 +124,11 @@ const TEMPLATES = [
     defaultUrl: 'https://danzversity.com/camps',
     fields: [
       f('week', 'Week (1-5)', '1', '1', true),
-      f('instructor', 'Instructor', 'JAYMIE OROZCO-HOWARD', 'JAYMIE OROZCO-HOWARD'),
-      f('ages', 'Ages / hours', 'AGES 7-12 | 9AM-3PM', 'AGES 7-12 | 9AM-3PM'),
-      f('price', 'Price', '$85/DAY | $395/WEEK', '$85/DAY | $395/WEEK'),
+      f('benefit', 'Hook line', '5 DAYS · ONE CREW · FRIDAY SHOWCASE', '5 DAYS · ONE CREW · FRIDAY SHOWCASE'),
+      f('ages', 'Ages / hours', 'AGES 7-12 · 9AM-3PM', 'AGES 7-12 · 9AM-3PM'),
+      f('instructor', 'Instructor', 'JAYMIE', 'JAYMIE'),
+      f('price', 'Price / value', '$395/WEEK · DAY $85', '$395/WEEK · DAY $85'),
+      f('urgency', 'Urgency', 'ONLY 15 SPOTS A WEEK', 'ONLY 15 SPOTS A WEEK'),
     ],
     body: 'The central photo is a vivid, high-saturation shot of real Danzversity kids posed confidently against the studio\'s outdoor graffiti wall. Rich color in the graffiti — deep purples, bright pinks, vibrant teals, electric blues, splashes of orange. Warm natural sunlight on the kids. Danzversity teal graffiti logo at top center. The text "HIP HOP SUMMER CAMP" in large Bebas Neue all-caps gold letters. Below that "{weekLine}" in white Bebas Neue. The vibrant photo in the middle. The text "MORE THAN MOVES — IT\'S CULTURE." in white. A thin gold accent line. The text "{ages}" in white. The text "TAUGHT BY {instructor}" in white. The text "FRIDAY SHOWCASE FOR FAMILIES" in white. The text "{price}" in gold. A gold pill button with "REGISTER NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/CAMPS" and "7531 BURNET RD · AUSTIN, TX 78757".',
   },
@@ -294,8 +299,8 @@ function expandContent(template, content) {
 const FOOTER_ADDRESS = '7531 BURNET RD · AUSTIN, TX 78757';
 
 const CHASSIS = {
-  'summer-camp-evergreen': { layout: 'A', headline: 'HIP HOP SUMMER CAMP', subhead: 'SUMMER 2026', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{ages}', 'TAUGHT BY {instructor}', 'FRIDAY SHOWCASE FOR FAMILIES'], price: '{price}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/CAMPS', qr: true },
-  'summer-camp-perweek': { layout: 'A', headline: 'HIP HOP SUMMER CAMP', subhead: '{weekLine}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{ages}', 'TAUGHT BY {instructor}', 'FRIDAY SHOWCASE FOR FAMILIES'], price: '{price}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/CAMPS', qr: true },
+  'summer-camp-evergreen': { layout: 'A', kicker: "AUSTIN'S HIP-HOP HOME · 10 YEARS", headline: 'HIP HOP SUMMER CAMP', subhead: '{dates}', tagline: '{benefit}', infoLines: ['{ages} · WITH {instructor}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/CAMPS', qr: true },
+  'summer-camp-perweek': { layout: 'A', kicker: "AUSTIN'S HIP-HOP HOME · 10 YEARS", headline: 'HIP HOP SUMMER CAMP', subhead: '{weekLine}', tagline: '{benefit}', infoLines: ['{ages} · WITH {instructor}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/CAMPS', qr: true },
   'summer-camp-paid': { layout: 'A-Lite', headline: 'HIP HOP SUMMER CAMP', subhead: '{ages} · TAUGHT BY {instructor}', url: 'DANZVERSITY.COM/CAMPS', qr: false },
   'youth-allages': { layout: 'A', headline: 'HIP HOP DANCE', subhead: '{ages}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['ROOT RUNNERS • FLOW FINDERS', 'VIBE BUILDERS • ELEMENTZ CREW'], cta: 'ENROLL NOW', url: 'DANZVERSITY.COM/YOUTH', qr: true },
   'youth-paid': { layout: 'A-Lite', headline: 'HIP HOP DANCE CLASSES', subhead: '{ages} · TAUGHT BY {instructor}', url: 'DANZVERSITY.COM/YOUTH', qr: false },
@@ -330,12 +335,14 @@ function buildChassis(key, content = {}) {
   const fill = (s) => String(s).replace(/\{(\w+)\}/g, (m, k) => (filled[k] != null ? filled[k] : '')).replace(/\s{2,}/g, ' ').trim();
 
   const spec = { layout: base.layout, logo: true };
+  if (base.kicker) { const v = fill(base.kicker); if (v) spec.kicker = v; }
   if (base.headline) spec.headline = fill(base.headline);
   if (base.subhead) { const v = fill(base.subhead); if (v) spec.subhead = v; }
   if (base.tagline) spec.tagline = fill(base.tagline);
   if (base.infoLines) spec.infoLines = base.infoLines.map(fill).filter(Boolean);
   if (base.price) { const v = fill(base.price); if (v) spec.price = v; }
   if (base.cta) spec.cta = fill(base.cta);
+  if (base.urgency) { const v = fill(base.urgency); if (v) spec.urgency = v; }
   if (base.quote) spec.quote = fill(base.quote);
   if (base.keyword) spec.keyword = fill(base.keyword);
   if (base.reviewer) spec.reviewer = fill(base.reviewer);

@@ -56,6 +56,8 @@ function svgStyleA(W, H, spec, opts = {}) {
 
   // Top block (logo is composited separately, above this).
   const hSize = F(opts.headlineSize || 0.062);
+  // Kicker — eyebrow line above the headline (proof / tenure / credibility).
+  if (spec.kicker) L.push(t(spec.kicker, F(0.205), F(0.023), G, { ls: 3 }));
   if (spec.headline) {
     L.push(t(spec.headline, F(0.262), hSize, G));
     if (opts.headlineBar) L.push(`<rect x="${cx - F(0.14)}" y="${F(0.275)}" width="${F(0.28)}" height="${Math.max(3, F(0.006))}" fill="${G}"/>`);
@@ -73,6 +75,15 @@ function svgStyleA(W, H, spec, opts = {}) {
     L.push(`<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${ph / 2}" fill="${G}"/>`);
     L.push(t(spec.cta, py + ph * 0.70, F(0.030), BLK));
     y = py - F(0.024);
+  }
+  // Urgency strip — gold-outlined badge just above the CTA (scarcity / deadline).
+  if (spec.urgency) {
+    const uh = F(0.042);
+    const uw = Math.min(F(0.80), Math.max(F(0.34), spec.urgency.length * F(0.0142) + F(0.06)));
+    const uy = y - uh;
+    L.push(`<rect x="${cx - uw / 2}" y="${uy}" width="${uw}" height="${uh}" rx="${uh / 2}" fill="#000000" fill-opacity="0.35" stroke="${G}" stroke-width="${Math.max(2, F(0.0032))}"/>`);
+    L.push(t(spec.urgency, uy + uh * 0.66, F(0.0235), G, { ls: 1.5 }));
+    y = uy - F(0.024);
   }
   if (spec.price) { L.push(t(spec.price, y, F(0.035), G)); y -= F(0.046); }
   const info = (spec.infoLines || []).filter(Boolean).slice().reverse();
