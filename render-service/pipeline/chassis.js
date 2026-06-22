@@ -126,6 +126,60 @@ async function qrPng(data, size) {
   return QRCode.toBuffer(data, { type: 'png', width: size, margin: 2, color: { dark: '#000000', light: '#FFFFFF' } });
 }
 
+// Feather mask sized to the photo: transparent at the very top, ramping to fully
+// opaque by ~34% down. dest-in'd onto an OPAQUE photo so its top edge dissolves
+// into the plate (the plate shows through the fade) instead of a hard seam.
+function featherMaskSVG(w, h) {
+  return Buffer.from(
+    `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg"><defs>` +
+    `<linearGradient id="f" x1="0" y1="0" x2="0" y2="1">` +
+    `<stop offset="0" stop-color="#fff" stop-opacity="0"/>` +
+    `<stop offset="0.16" stop-color="#fff" stop-opacity="0.45"/>` +
+    `<stop offset="0.34" stop-color="#fff" stop-opacity="1"/>` +
+    `<stop offset="1" stop-color="#fff" stop-opacity="1"/>` +
+    `</linearGradient></defs>` +
+    `<rect width="${w}" height="${h}" fill="url(#f)"/></svg>`
+  );
+}
+
+// Place the real photo over the plate, INTEGRATED rather than pasted:
+//  • a genuine cutout (real transparency) floats with a soft contact shadow;
+//  • an opaque photo gets its top edge feathered + a gentle tone-grade so it
+//    melts into the background instead of hard-banding.
+async function personLayers(personInput, W, H, layout) {
+  const ph = Math.round(H * (layout === 'A-Lite' ? 0.70 : 0.60));
+  const maxW = Math.round(W * 0.94);
+  const resized = await sharp(personInput).resize({ height: ph, width: maxW, fit: 'inside' }).png().toBuffer();
+  const m = await sharp(resized).metadata();
+  const left = Math.round((W - m.width) / 2);
+  const top = layout === 'A-Lite' ? Math.round(H * 0.13) : (H - m.height - Math.round(H * 0.06));
+
+  // Genuine cutout, or just an opaque rectangle that carries an alpha channel?
+  let isCutout = false;
+  if (m.hasAlpha) {
+    const a = (await sharp(resized).stats()).channels.slice(-1)[0];
+    isCutout = a && a.min < 250; // real transparent pixels exist somewhere
+  }
+
+  const layers = [];
+  if (isCutout) {
+    // Soft contact shadow from the silhouette — grounds the cutout on the plate.
+    const sigma = Math.max(2, Math.round(ph * 0.02));
+    const shadow = await sharp(resized).modulate({ brightness: 0 }).blur(sigma).png().toBuffer();
+    layers.push({ input: shadow, top: top + Math.round(ph * 0.022), left });
+    layers.push({ input: resized, top, left });
+  } else {
+    const treated = await sharp(resized)
+      .modulate({ brightness: 0.94, saturation: 0.9 })            // calm the photo toward the plate
+      .ensureAlpha()
+      .composite([{ input: featherMaskSVG(m.width, m.height), blend: 'dest-in' }])  // feather the top edge
+      .png()
+      .toBuffer();
+    layers.push({ input: treated, top, left });
+  }
+  return layers;
+}
+
 /**
  * Compose a finished flyer at one size: background (+ optional person) + chassis (+ QR).
  */
@@ -136,15 +190,10 @@ async function compose(o) {
 
   let base = sharp(o.background).resize(W, H, { fit: 'cover', position: sharp.strategy.attention }).flatten({ background: brand.LETTERBOX_FILL });
 
-  // Person cutout — fit WITHIN the canvas (cap both height AND width) so a wide or
-  // large real photo can never overflow the composite. Bigger + higher for paid.
+  // Real photo over the plate — integrated (feathered/graded or floated with a
+  // contact shadow), never a hard-pasted rectangle. See personLayers().
   if (o.person && layout !== 'testimonial') {
-    const ph = Math.round(H * (layout === 'A-Lite' ? 0.70 : 0.60));
-    const maxW = Math.round(W * 0.94);
-    const personBuf = await sharp(o.person).resize({ height: ph, width: maxW, fit: 'inside' }).png().toBuffer();
-    const pm = await sharp(personBuf).metadata();
-    const top = layout === 'A-Lite' ? Math.round(H * 0.13) : (H - pm.height - Math.round(H * 0.06));
-    layers.push({ input: personBuf, top, left: Math.round((W - pm.width) / 2) });
+    for (const lyr of await personLayers(o.person, W, H, layout)) layers.push(lyr);
   }
 
   layers.push({ input: Buffer.from(chassisSVG(W, H, spec)), top: 0, left: 0 });
