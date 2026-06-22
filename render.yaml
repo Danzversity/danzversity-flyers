@@ -27,6 +27,14 @@ services:
         sync: false           # paste service-account JSON in dashboard
       - key: FLYERS_ROOT_FOLDER_ID
         sync: false           # shared Drive FLYERS folder id
+      - key: BG_FOLDER_ID
+        sync: false           # _backgrounds folder id — REQUIRED or the bg library falls back to (empty) ephemeral disk
+      - key: PEOPLE_FOLDER_ID
+        sync: false           # _people folder id — REQUIRED or the people library falls back to (empty) ephemeral disk
+      - key: REMOVEBG_API_KEY
+        sync: false           # without it, person photos composite UNCUT (raw background)
+      - key: IDEOGRAM_API_KEY
+        sync: false           # optional — only for in-tool background generation
       - key: FLYERS_USER
         sync: false           # basic-auth user (optional)
       - key: FLYERS_PASSWORD
