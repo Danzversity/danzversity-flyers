@@ -64,7 +64,7 @@ async function initCreate() {
   $('addPhotoBtn').addEventListener('click', () => $('photoInput').click());
   $('photoInput').addEventListener('change', onPickPhoto);
   document.querySelectorAll('#modeToggle .seg-btn').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
-  setMode('photo');
+  setMode('scene');
   onTemplateChange();
   loadLibraries();
 }
@@ -134,17 +134,21 @@ function onUploadBg() {
 }
 
 function setMode(m) {
-  create.mode = m === 'plate' ? 'plate' : 'photo';
+  create.mode = ['scene', 'cutout', 'photo'].includes(m) ? m : 'scene';
   const photoMode = create.mode === 'photo';
   document.querySelectorAll('#modeToggle .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === create.mode));
-  // The background picker only matters in cut-out mode — hide it in full-bleed.
+  // Full-bleed needs no separate plate; scene + cutout both composite onto one.
   $('bgBlock').classList.toggle('hidden', photoMode);
   $('photoLabel').innerHTML = photoMode
     ? 'Photo <span class="muted">(fills the whole flyer)</span>'
-    : 'Photo of real people <span class="muted">(cut out onto the background)</span>';
+    : (create.mode === 'cutout'
+        ? 'Photo of ONE subject <span class="muted">(lifted onto the plate)</span>'
+        : 'Photo / scene <span class="muted">(placed whole onto the plate)</span>');
   $('modeHint').textContent = photoMode
     ? 'Your photo becomes the whole flyer — no separate background needed.'
-    : 'Your photo is cut out and placed on the background plate (needs Remove.bg for a clean edge).';
+    : (create.mode === 'cutout'
+        ? 'Best for a SINGLE dancer — Remove.bg lifts them off their background onto the plate.'
+        : 'Best for group / action shots — the whole photo sits in a clean band on the plate. No AI cutout.');
 }
 
 function renderPeoplePicker() {
@@ -177,7 +181,7 @@ async function onCompose() {
   if (create.mode === 'photo') {
     if (!create.photoFile && !create.selectedPersonId) return toast('Full-bleed: upload or pick a photo.', 'err');
   } else if (!create.selectedBg && !create.bgFile) {
-    return toast('Cut-out: pick or upload a background.', 'err');
+    return toast('Pick or upload a background plate.', 'err');
   }
 
   if (!$('qrToggle').checked) content.qr = false;

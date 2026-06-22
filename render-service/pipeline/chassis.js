@@ -28,6 +28,7 @@ function defs(topH, botStart) {
   return `<defs>
     <linearGradient id="ts" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0.9"/><stop offset="0.6" stop-color="#000" stop-opacity="0.4"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
     <linearGradient id="bs" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0.97"/><stop offset="0.5" stop-color="#000" stop-opacity="0.82"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
+    <linearGradient id="ps" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.55" stop-color="#000" stop-opacity="0.35"/><stop offset="1" stop-color="#000" stop-opacity="0.62"/></linearGradient>
     <style>@font-face{font-family:'Bebas Neue';src:url(data:font/ttf;base64,${fontB64()}) format('truetype');}text{font-family:'Bebas Neue',sans-serif;}</style>
   </defs>
   <rect x="0" y="0" width="100%" height="${topH}" fill="url(#ts)"/>
@@ -48,6 +49,10 @@ function svgStyleA(W, H, spec, opts = {}) {
   const topH = F(opts.scrimTop || 0.34), botStart = F(0.55);
   const t = (s, y, size, fill, o = {}) => `<text x="${o.x || cx}" y="${y}" font-size="${size}" fill="${fill}" text-anchor="middle" letter-spacing="${o.ls || 1}">${esc(s)}</text>`;
   const L = [`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`, defs(topH, botStart)];
+
+  // Extra scrim panel concentrated behind the lower info block — locks legibility
+  // of the tagline / info / price over busy plates without darkening the photo band.
+  L.push(`<rect x="0" y="${F(0.60)}" width="100%" height="${F(0.40)}" fill="url(#ps)"/>`);
 
   // Top block (logo is composited separately, above this).
   const hSize = F(opts.headlineSize || 0.062);
@@ -126,6 +131,22 @@ async function qrPng(data, size) {
   return QRCode.toBuffer(data, { type: 'png', width: size, margin: 2, color: { dark: '#000000', light: '#FFFFFF' } });
 }
 
+// QR on a contained white tile with a SCAN label — reads as an intentional CTA
+// instead of a bare code floating on the art.
+async function qrTile(data, qs, label) {
+  const pad = Math.round(qs * 0.12);
+  const labelH = label ? Math.round(qs * 0.20) : 0;
+  const tw = qs + pad * 2, th = qs + pad * 2 + labelH;
+  const svg =
+    `<svg width="${tw}" height="${th}" xmlns="http://www.w3.org/2000/svg"><defs>` +
+    `<style>@font-face{font-family:'Bebas Neue';src:url(data:font/ttf;base64,${fontB64()}) format('truetype');}text{font-family:'Bebas Neue',sans-serif;}</style></defs>` +
+    `<rect x="0" y="0" width="${tw}" height="${th}" rx="${Math.round(pad * 1.1)}" fill="#FFFFFF"/>` +
+    (label ? `<text x="${tw / 2}" y="${qs + pad * 2 + Math.round(labelH * 0.70)}" font-size="${Math.round(labelH * 0.6)}" fill="#000000" text-anchor="middle" letter-spacing="1.5">${esc(label)}</text>` : '') +
+    `</svg>`;
+  const qr = await qrPng(data, qs);
+  return sharp(Buffer.from(svg)).composite([{ input: qr, top: pad, left: pad }]).png().toBuffer();
+}
+
 // Feather mask sized to the photo: transparent at the very top, ramping to fully
 // opaque by ~34% down. dest-in'd onto an OPAQUE photo so its top edge dissolves
 // into the plate (the plate shows through the fade) instead of a hard seam.
@@ -142,42 +163,92 @@ function featherMaskSVG(w, h) {
   );
 }
 
-// Place the real photo over the plate, INTEGRATED rather than pasted:
-//  • a genuine cutout (real transparency) floats with a soft contact shadow;
-//  • an opaque photo gets its top edge feathered + a gentle tone-grade so it
-//    melts into the background instead of hard-banding.
-async function personLayers(personInput, W, H, layout) {
-  const ph = Math.round(H * (layout === 'A-Lite' ? 0.70 : 0.60));
-  const maxW = Math.round(W * 0.94);
-  const resized = await sharp(personInput).resize({ height: ph, width: maxW, fit: 'inside' }).png().toBuffer();
-  const m = await sharp(resized).metadata();
-  const left = Math.round((W - m.width) / 2);
-  const top = layout === 'A-Lite' ? Math.round(H * 0.13) : (H - m.height - Math.round(H * 0.06));
+// Band mask — feathers BOTH the top and bottom edges, so a photo placed as a
+// clear middle band floats between the headline (above) and the info block
+// (below) with no hard seam on either side.
+function bandMaskSVG(w, h) {
+  return Buffer.from(
+    `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg"><defs>` +
+    `<linearGradient id="b" x1="0" y1="0" x2="0" y2="1">` +
+    `<stop offset="0" stop-color="#fff" stop-opacity="0"/>` +
+    `<stop offset="0.14" stop-color="#fff" stop-opacity="1"/>` +
+    `<stop offset="0.88" stop-color="#fff" stop-opacity="1"/>` +
+    `<stop offset="1" stop-color="#fff" stop-opacity="0"/>` +
+    `</linearGradient></defs>` +
+    `<rect width="${w}" height="${h}" fill="url(#b)"/></svg>`
+  );
+}
 
-  // Genuine cutout, or just an opaque rectangle that carries an alpha channel?
+// Side mask — feathers the LEFT and RIGHT edges. Applied as a second dest-in
+// pass after the band mask so the standard scene photo melts into the plate on
+// all four sides (no hard vertical seams).
+function sideMaskSVG(w, h) {
+  return Buffer.from(
+    `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg"><defs>` +
+    `<linearGradient id="s" x1="0" y1="0" x2="1" y2="0">` +
+    `<stop offset="0" stop-color="#fff" stop-opacity="0"/>` +
+    `<stop offset="0.09" stop-color="#fff" stop-opacity="1"/>` +
+    `<stop offset="0.91" stop-color="#fff" stop-opacity="1"/>` +
+    `<stop offset="1" stop-color="#fff" stop-opacity="0"/>` +
+    `</linearGradient></defs>` +
+    `<rect width="${w}" height="${h}" fill="url(#s)"/></svg>`
+  );
+}
+
+// Place the real photo over the plate, INTEGRATED rather than pasted:
+//  • genuine cutout (real transparency) → floats with a soft contact shadow;
+//  • standard scene photo → SMART-CROPPED to the subjects (cover + attention)
+//    into a clean middle band, feathered on ALL FOUR sides + tone-graded;
+//  • paid (A-Lite) scene → photo-dominant high band, top-edge feather.
+async function personLayers(personInput, W, H, layout) {
+  const isPaid = layout === 'A-Lite';
+
+  // Genuine cutout, or an opaque scene photo that merely carries an alpha channel?
+  const meta0 = await sharp(personInput).metadata();
   let isCutout = false;
-  if (m.hasAlpha) {
-    const a = (await sharp(resized).stats()).channels.slice(-1)[0];
+  if (meta0.hasAlpha) {
+    const a = (await sharp(personInput).stats()).channels.slice(-1)[0];
     isCutout = a && a.min < 250; // real transparent pixels exist somewhere
   }
 
-  const layers = [];
+  // ── Cutout: fit within its zone, ground it with a soft contact shadow. ──
   if (isCutout) {
-    // Soft contact shadow from the silhouette — grounds the cutout on the plate.
+    const ph = Math.round(H * (isPaid ? 0.70 : 0.29));
+    const maxW = Math.round(W * (isPaid ? 0.94 : 0.86));
+    const resized = await sharp(personInput).resize({ height: ph, width: maxW, fit: 'inside' }).png().toBuffer();
+    const m = await sharp(resized).metadata();
+    const left = Math.round((W - m.width) / 2);
+    const top = isPaid ? Math.round(H * 0.13) : Math.round(H * 0.34);
     const sigma = Math.max(2, Math.round(ph * 0.02));
     const shadow = await sharp(resized).modulate({ brightness: 0 }).blur(sigma).png().toBuffer();
-    layers.push({ input: shadow, top: top + Math.round(ph * 0.022), left });
-    layers.push({ input: resized, top, left });
-  } else {
-    const treated = await sharp(resized)
-      .modulate({ brightness: 0.94, saturation: 0.9 })            // calm the photo toward the plate
-      .ensureAlpha()
-      .composite([{ input: featherMaskSVG(m.width, m.height), blend: 'dest-in' }])  // feather the top edge
-      .png()
-      .toBuffer();
-    layers.push({ input: treated, top, left });
+    return [{ input: shadow, top: top + Math.round(ph * 0.022), left }, { input: resized, top, left }];
   }
-  return layers;
+
+  // ── Paid scene: photo-dominant high band, top-edge feather only. ──
+  if (isPaid) {
+    const ph = Math.round(H * 0.70), maxW = Math.round(W * 0.94);
+    const resized = await sharp(personInput).resize({ height: ph, width: maxW, fit: 'inside' })
+      .modulate({ brightness: 0.94, saturation: 0.9 }).ensureAlpha().png().toBuffer();
+    const m = await sharp(resized).metadata();
+    const masked = await sharp(resized).composite([{ input: featherMaskSVG(m.width, m.height), blend: 'dest-in' }]).png().toBuffer();
+    return [{ input: masked, top: Math.round(H * 0.13), left: Math.round((W - m.width) / 2) }];
+  }
+
+  // ── Standard scene (A/B): SMART-CROP to the dancers (cover + attention) into a
+  // defined middle band, then feather all four edges + tone-grade so it melts
+  // into the plate on every side. Band ends at ~63% so the info block clears it.
+  const bandW = Math.round(W * 0.80), bandH = Math.round(H * 0.30);
+  const top = Math.round(H * 0.335), left = Math.round((W - bandW) / 2);
+  let treated = await sharp(personInput)
+    .resize({ width: bandW, height: bandH, fit: 'cover', position: sharp.strategy.attention })
+    .modulate({ brightness: 0.94, saturation: 0.9 })
+    .ensureAlpha()
+    .composite([{ input: bandMaskSVG(bandW, bandH), blend: 'dest-in' }])   // feather top + bottom
+    .png().toBuffer();
+  treated = await sharp(treated)
+    .composite([{ input: sideMaskSVG(bandW, bandH), blend: 'dest-in' }])   // feather left + right
+    .png().toBuffer();
+  return [{ input: treated, top, left }];
 }
 
 /**
@@ -207,7 +278,9 @@ async function compose(o) {
 
   if (spec.qr) {
     const qs = Math.round(W * 0.13);
-    layers.push({ input: await qrPng(spec.qr, qs), top: H - qs - Math.round(H * 0.085), left: W - qs - Math.round(W * 0.04) });
+    const tile = await qrTile(spec.qr, qs, spec.cta ? 'SCAN TO REGISTER' : null);
+    const tm = await sharp(tile).metadata();
+    layers.push({ input: tile, top: H - tm.height - Math.round(H * 0.072), left: W - tm.width - Math.round(W * 0.04) });
   }
 
   return base.composite(layers).png({ compressionLevel: 9 }).toBuffer();

@@ -226,8 +226,10 @@ app.post('/compose', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'bac
     let content = {};
     if (req.body.content) { try { content = JSON.parse(req.body.content); } catch (_) { return res.status(400).json({ ok: false, error: 'content must be JSON' }); } }
 
-    // mode: 'photo' = the photo fills the frame (full-bleed); 'plate' = cut-out person on a background plate.
-    const mode = req.body.mode === 'plate' ? 'plate' : 'photo';
+    // mode: 'photo' = photo fills the frame (full-bleed); 'scene' = the WHOLE photo
+    // sits on a plate (band + feather, NO Remove.bg — best for group/action shots);
+    // 'cutout' = a single subject is lifted onto a plate (Remove.bg).
+    const mode = ['photo', 'scene', 'cutout'].includes(req.body.mode) ? req.body.mode : 'photo';
 
     // Gather the photo (uploaded, optionally saved to library, OR a library person).
     let photoBuf = null;
@@ -254,9 +256,11 @@ app.post('/compose', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'bac
       if (!photoBuf) return res.status(400).json({ ok: false, error: 'Full-bleed mode needs a photo.' });
       background = photoBuf; // the photo IS the background — no rectangle, no second plate
     } else {
-      if (!plateBuf) return res.status(400).json({ ok: false, error: 'Cut-out mode needs a background plate.' });
+      if (!plateBuf) return res.status(400).json({ ok: false, error: 'This mode needs a background plate.' });
       background = plateBuf;
-      person = photoBuf ? await removebg.cutoutCached(photoBuf) : null; // cut the person out onto the plate
+      // 'cutout' lifts a single subject with Remove.bg; 'scene' keeps the whole photo
+      // (no API call — the chassis bands + feathers it onto the plate).
+      person = photoBuf ? (mode === 'cutout' ? await removebg.cutoutCached(photoBuf) : photoBuf) : null;
     }
 
     const result = await composeFlyer({ templateKey, content, background, person, slug: req.body.slug || content.title });
