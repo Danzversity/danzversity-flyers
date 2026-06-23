@@ -24,13 +24,15 @@ services:
       - key: CORS_ORIGIN
         value: https://flyers.danzversity.com
       - key: GOOGLE_SERVICE_ACCOUNT
-        sync: false           # paste service-account JSON in dashboard
+        sync: false           # paste the danzversity-flyer-maker SA JSON (one line) in the dashboard
+      # Drive folder ids — NOT secret (the folders are link-readable; writes need the SA),
+      # so they ship in the blueprint. All three are already shared with the SA above.
       - key: FLYERS_ROOT_FOLDER_ID
-        sync: false           # shared Drive FLYERS folder id
+        value: "1UavdQcAFlA7xnmqwJlXoD9IaXbeWUwbq"   # FLYERS root (dated save tree)
       - key: BG_FOLDER_ID
-        sync: false           # _backgrounds folder id — REQUIRED or the bg library falls back to (empty) ephemeral disk
+        value: "1P6jJukLiqVZ9n6fX6eLSQmUr74audhs1"   # FLYERS/_backgrounds
       - key: PEOPLE_FOLDER_ID
-        sync: false           # _people folder id — REQUIRED or the people library falls back to (empty) ephemeral disk
+        value: "1CH0xQT17kjRatci698wvVxFSo2ZRysZw"   # FLYERS/_people
       - key: REMOVEBG_API_KEY
         sync: false           # without it, person photos composite UNCUT (raw background)
       - key: IDEOGRAM_API_KEY
