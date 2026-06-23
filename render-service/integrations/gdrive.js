@@ -1,21 +1,19 @@
-// Google Drive integration — service-account upload into the shared FLYERS tree.
+// Google Drive integration — service-account REST calls over node:https.
 //
-// Folder layout (created on demand, idempotent find-or-create):
-//   FLYERS/{Template}/{YYYY-MM}/{Organic|Paid}/{filename}.png
-//
-// Auth: GOOGLE_SERVICE_ACCOUNT env holds the service-account JSON (one line).
-// Service accounts have no Drive storage quota, so the FLYERS root must be a
-// folder shared WITH the service account (or a Shared Drive). Set
-// FLYERS_ROOT_FOLDER_ID to that shared folder's id to skip the name lookup
-// (recommended — faster and unambiguous).
+// We deliberately do NOT use the googleapis library here. On Render (Node 22 +
+// gaxios 6 / undici) EVERY googleapis call dies with "Premature close" — the
+// token mint AND the Drive calls — even though plain node:https / fetch to the
+// same hosts works fine (verified: googleapis returns normal HTTP responses).
+// So we sign the SA JWT with node crypto, mint the token over https, and hit the
+// Drive REST API directly with node:https. Zero gaxios, zero undici.
 
-const { google } = require('googleapis');
-const { Readable } = require('stream');
 const https = require('https');
 const crypto = require('crypto');
 const brand = require('../brand');
 
 const SCOPES = ['https://www.googleapis.com/auth/drive'];
+const API = 'https://www.googleapis.com/drive/v3';
+const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 
 function isConfigured() {
   return !!process.env.GOOGLE_SERVICE_ACCOUNT;
@@ -24,43 +22,36 @@ function isConfigured() {
 function getCredentials() {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT;
   if (!raw) throw new Error('GOOGLE_SERVICE_ACCOUNT not set');
-  let creds;
   try {
-    creds = JSON.parse(raw);
+    return JSON.parse(raw);
   } catch (e) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT is not valid JSON');
   }
-  return creds;
 }
 
-// Mint the service-account access token OURSELVES via node:https.
-//
-// In prod (Node 22 + gaxios 6 / undici), google-auth-library's token POST to
-// googleapis dies with "Premature close" — even though plain GET/POST to the
-// same host works fine (verified: googleapis returns 404s, so the network is
-// healthy). So we sign the JWT with node crypto and POST it with node:https
-// (rock-solid HTTP/1.1), then hand the access token to the Drive client. Token
-// is cached until ~60s before expiry.
+// ── Low-level HTTPS (node:https — bypasses the broken gaxios/undici path) ──────
+function httpsRequest(method, urlStr, headers, body) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(urlStr);
+    const req = https.request(
+      { method, hostname: u.hostname, path: u.pathname + u.search, headers: headers || {} },
+      (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => resolve({ status: res.statusCode, buffer: Buffer.concat(chunks) }));
+      }
+    );
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+// ── Service-account token mint (cached until ~60s before expiry) ──────────────
 let _token = null;
 
 function b64url(input) {
   return Buffer.from(input).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
-}
-
-function httpsPostForm(url, body) {
-  return new Promise((resolve, reject) => {
-    const req = https.request(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) },
-    }, (res) => {
-      let data = '';
-      res.on('data', (c) => { data += c; });
-      res.on('end', () => resolve({ status: res.statusCode, data }));
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
 }
 
 async function getAccessToken() {
@@ -72,109 +63,30 @@ async function getAccessToken() {
   const claims = b64url(JSON.stringify({ iss: creds.client_email, scope: SCOPES.join(' '), aud, iat: now, exp: now + 3600 }));
   const signingInput = `${header}.${claims}`;
   const signature = b64url(crypto.sign('RSA-SHA256', Buffer.from(signingInput), creds.private_key));
-  const assertion = `${signingInput}.${signature}`;
-  const body = `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${assertion}`;
-  const res = await httpsPostForm(aud, body);
-  if (res.status !== 200) throw new Error(`SA token mint failed (${res.status}): ${String(res.data).slice(0, 200)}`);
-  const json = JSON.parse(res.data);
+  const body = `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${signingInput}.${signature}`;
+  const res = await httpsRequest('POST', aud, {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Content-Length': Buffer.byteLength(body),
+  }, body);
+  if (res.status !== 200) throw new Error(`SA token mint failed (${res.status}): ${res.buffer.toString().slice(0, 200)}`);
+  const json = JSON.parse(res.buffer.toString());
   if (!json.access_token) throw new Error('SA token mint: no access_token in response');
   _token = { access_token: json.access_token, exp: now + (json.expires_in || 3600) - 60 };
   return _token.access_token;
 }
 
-async function getDrive() {
+async function authHeaders(extra) {
   const token = await getAccessToken();
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: token });
-  return google.drive({ version: 'v3', auth });
+  return { Authorization: `Bearer ${token}`, ...(extra || {}) };
 }
 
-/** Find a child folder by name under parent (or anywhere shared, if no parent), else create it. */
-async function findOrCreateFolder(drive, name, parentId) {
-  const safe = String(name).replace(/'/g, "\\'");
-  const q = [
-    `name='${safe}'`,
-    "mimeType='application/vnd.google-apps.folder'",
-    'trashed=false',
-    parentId ? `'${parentId}' in parents` : null,
-  ].filter(Boolean).join(' and ');
-
-  const res = await drive.files.list({
-    q,
-    fields: 'files(id,name)',
-    spaces: 'drive',
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
-    pageSize: 10,
-  });
-  if (res.data.files && res.data.files.length) return res.data.files[0].id;
-
-  const created = await drive.files.create({
-    requestBody: {
-      name,
-      mimeType: 'application/vnd.google-apps.folder',
-      parents: parentId ? [parentId] : undefined,
-    },
-    fields: 'id',
-    supportsAllDrives: true,
-  });
-  return created.data.id;
+// ── Drive REST ────────────────────────────────────────────────────────────────
+function qs(params) {
+  return Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
 }
 
-/** Resolve FLYERS/{template}/{yyyymm}/{bucket} to a folder id, creating as needed. */
-async function resolvePath(drive, segments) {
-  let parent = process.env.FLYERS_ROOT_FOLDER_ID || null;
-  // If the root id is provided it IS segment[0] (FLYERS); start creating from [1].
-  let startIdx = parent ? 1 : 0;
-  for (let i = startIdx; i < segments.length; i++) {
-    parent = await findOrCreateFolder(drive, segments[i], parent);
-  }
-  return parent;
-}
-
-async function uploadPng(drive, folderId, filename, buffer) {
-  const res = await drive.files.create({
-    requestBody: { name: filename, parents: [folderId] },
-    media: { mimeType: 'image/png', body: Readable.from(buffer) },
-    fields: 'id,name,webViewLink',
-    supportsAllDrives: true,
-  });
-  return res.data;
-}
-
-/**
- * Save a set of images into the dated FLYERS tree, bucketed by channel.
- * @param {string} template  e.g. "Summer Camp Week 1"
- * @param {string} yyyymm    e.g. "2026-06"
- * @param {Array<{filename:string,buffer:Buffer,channel:'organic'|'paid'}>} images
- * @returns {Promise<{results:Array, savedCount:number}>}
- */
-async function saveImages(template, yyyymm, images) {
-  const drive = await getDrive();
-  const folderCache = {};
-  const results = [];
-
-  for (const img of images) {
-    const channel = img.channel === 'paid' ? 'paid' : 'organic';
-    if (!folderCache[channel]) {
-      const segs = brand.drivePathSegments(template, yyyymm, channel);
-      folderCache[channel] = await resolvePath(drive, segs);
-    }
-    try {
-      const f = await uploadPng(drive, folderCache[channel], img.filename, img.buffer);
-      results.push({ filename: img.filename, success: true, fileId: f.id, webViewLink: f.webViewLink });
-    } catch (e) {
-      results.push({ filename: img.filename, success: false, error: e.message });
-    }
-  }
-
-  return { results, savedCount: results.filter((r) => r.success).length };
-}
-
-// ── Library helpers (backgrounds / people folders) ───────────────────────────
 async function listImages(folderId) {
-  const drive = await getDrive();
-  const res = await drive.files.list({
+  const url = `${API}/files?` + qs({
     q: `'${folderId}' in parents and mimeType contains 'image/' and trashed=false`,
     fields: 'files(id,name,mimeType,thumbnailLink,modifiedTime)',
     orderBy: 'modifiedTime desc',
@@ -182,24 +94,88 @@ async function listImages(folderId) {
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
   });
-  return res.data.files || [];
+  const res = await httpsRequest('GET', url, await authHeaders());
+  if (res.status !== 200) throw new Error(`Drive list ${res.status}: ${res.buffer.toString().slice(0, 200)}`);
+  return JSON.parse(res.buffer.toString()).files || [];
 }
 
 async function downloadFile(fileId) {
-  const drive = await getDrive();
-  const res = await drive.files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
-  return Buffer.from(res.data);
+  const url = `${API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`;
+  const res = await httpsRequest('GET', url, await authHeaders());
+  if (res.status !== 200) throw new Error(`Drive download ${res.status}: ${res.buffer.toString().slice(0, 150)}`);
+  return res.buffer;
+}
+
+async function findOrCreateFolder(name, parentId) {
+  const safe = String(name).replace(/'/g, "\\'");
+  const clauses = [`name='${safe}'`, "mimeType='application/vnd.google-apps.folder'", 'trashed=false'];
+  if (parentId) clauses.push(`'${parentId}' in parents`);
+  const listUrl = `${API}/files?` + qs({
+    q: clauses.join(' and '),
+    fields: 'files(id,name)',
+    spaces: 'drive',
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+    pageSize: 10,
+  });
+  const lr = await httpsRequest('GET', listUrl, await authHeaders());
+  if (lr.status === 200) {
+    const files = JSON.parse(lr.buffer.toString()).files;
+    if (files && files.length) return files[0].id;
+  }
+  const body = JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: parentId ? [parentId] : undefined });
+  const cr = await httpsRequest('POST', `${API}/files?supportsAllDrives=true&fields=id`,
+    await authHeaders({ 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }), body);
+  if (cr.status !== 200) throw new Error(`Drive folder create ${cr.status}: ${cr.buffer.toString().slice(0, 150)}`);
+  return JSON.parse(cr.buffer.toString()).id;
+}
+
+async function resolvePath(segments) {
+  let parent = process.env.FLYERS_ROOT_FOLDER_ID || null;
+  const startIdx = parent ? 1 : 0;
+  for (let i = startIdx; i < segments.length; i++) parent = await findOrCreateFolder(segments[i], parent);
+  return parent;
 }
 
 async function uploadImage(folderId, name, buffer, mimeType = 'image/png') {
-  const drive = await getDrive();
-  const res = await drive.files.create({
-    requestBody: { name, parents: [folderId] },
-    media: { mimeType, body: Readable.from(buffer) },
-    fields: 'id,name,webViewLink',
-    supportsAllDrives: true,
-  });
-  return res.data;
+  const boundary = '----dvzflyer' + crypto.randomBytes(8).toString('hex');
+  const meta = JSON.stringify({ name, parents: [folderId] });
+  const pre = Buffer.from(
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n` +
+    `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`
+  );
+  const post = Buffer.from(`\r\n--${boundary}--\r\n`);
+  const body = Buffer.concat([pre, buffer, post]);
+  const url = `${UPLOAD}/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,webViewLink`;
+  const res = await httpsRequest('POST', url,
+    await authHeaders({ 'Content-Type': `multipart/related; boundary=${boundary}`, 'Content-Length': body.length }), body);
+  if (res.status !== 200) throw new Error(`Drive upload ${res.status}: ${res.buffer.toString().slice(0, 150)}`);
+  return JSON.parse(res.buffer.toString());
+}
+
+/**
+ * Save a set of images into the dated FLYERS tree, bucketed by channel.
+ * @param {string} template  e.g. "Summer Camp Week 1"
+ * @param {string} yyyymm    e.g. "2026-06"
+ * @param {Array<{filename:string,buffer:Buffer,channel:'organic'|'paid'}>} images
+ */
+async function saveImages(template, yyyymm, images) {
+  const folderCache = {};
+  const results = [];
+  for (const img of images) {
+    const channel = img.channel === 'paid' ? 'paid' : 'organic';
+    if (!folderCache[channel]) {
+      const segs = brand.drivePathSegments(template, yyyymm, channel);
+      folderCache[channel] = await resolvePath(segs);
+    }
+    try {
+      const f = await uploadImage(folderCache[channel], img.filename, img.buffer, 'image/png');
+      results.push({ filename: img.filename, success: true, fileId: f.id, webViewLink: f.webViewLink });
+    } catch (e) {
+      results.push({ filename: img.filename, success: false, error: e.message });
+    }
+  }
+  return { results, savedCount: results.filter((r) => r.success).length };
 }
 
 module.exports = { isConfigured, saveImages, listImages, downloadFile, uploadImage };
