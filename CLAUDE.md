@@ -68,15 +68,14 @@ node render-service/seed-library-dev.js    # seed local library for dev
 npm start                                  # http://localhost:3001
 ```
 
-## Go-live (production)
+## Production — LIVE
 
-1. Provision the Render service from the repo (`render.yaml`).
-2. **Share the `FLYERS` Drive folder with the service account** (so the libraries + save work).
-3. Env on Render: `GOOGLE_SERVICE_ACCOUNT`, `FLYERS_ROOT_FOLDER_ID`, `BG_FOLDER_ID`, `PEOPLE_FOLDER_ID`, `REMOVEBG_API_KEY`, optional `IDEOGRAM_API_KEY` (background generation), optional `FLYERS_USER`/`FLYERS_PASSWORD`.
-4. Point `flyers.danzversity.com` at the Render service.
+**LIVE on Render** (since 2026-06-23): `https://danzversity-flyers.onrender.com`, basic-auth `danzversity` / `7531Burnet`. Service `danzversity-flyers`, autoDeploy on `main` from `render.yaml` (folder IDs baked in as plain values; SA JSON + `REMOVEBG_API_KEY` are dashboard secrets). SA = `danzversity-flyer-maker@danzversity-payments.iam.gserviceaccount.com`, already shared on the FLYERS folders. Optional remaining: CNAME `flyers.danzversity.com` → Render (DNS on Netlify).
 
 ## Discipline
 
 - `brand.js` and `templates.js` are the single sources of truth — never hard-code hexes/sizes/copy elsewhere.
 - The chassis is code-locked and deterministic — keep it that way.
 - Real-people photos live only in the private Drive, never committed.
+- **Drive auth/REST is hand-rolled over `node:https` in `integrations/gdrive.js` — do NOT reintroduce the `googleapis` library.** On Render (Node 22 + gaxios/undici) every googleapis call dies with "Premature close"; node:https works. We sign the SA JWT with node crypto and hit the Drive REST API directly.
+- **(You)nity flyers are AACME/Elevate grant-compliant** — the `younity-nights` template MUST keep the verbatim publicity statement (don't fix "a Elevate"), the AACME logo, tourist-welcoming copy, AND the RSVP/registration QR (attendance tracking is a grant obligation). Never strip these.
