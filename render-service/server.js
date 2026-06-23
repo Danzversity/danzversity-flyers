@@ -15,6 +15,11 @@
 // bundle endpoints exist for headless/API/cron use.
 
 require('dotenv').config();
+// Force IPv4-first DNS. Node 22 + gaxios/undici default to IPv6, which resets the
+// connection to googleapis.com mid-response ("Premature close") on hosts like
+// Render — breaking the service-account token mint. IPv4-first fixes it.
+require('dns').setDefaultResultOrder('ipv4first');
+
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
