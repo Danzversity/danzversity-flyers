@@ -195,9 +195,13 @@ const TEMPLATES = [
 
   // ----- (YOU)NITY NIGHTS (Style B) -----
   {
-    key: 'younity-nights', label: '(You)nity Nights', family: 'B', group: 'Events',
+    key: 'younity-nights', label: '(You)nity Nights', family: 'B', group: '(You)nity',
     defaultUrl: 'https://danzversity.com',
-    fields: [f('schedule', 'When', '3RD FRIDAY | 7-9PM', '3RD FRIDAY | 7-9PM')],
+    fields: [
+      f('date', 'Date', 'SAT JUNE 27', 'SAT JUNE 27'),
+      f('time', 'Time', '7-9PM', '7-9PM'),
+      f('lineup', 'Lineup', 'LIVE PERFORMANCES · OPEN MIC · WORKSHOPS', 'LIVE PERFORMANCES · OPEN MIC · WORKSHOPS'),
+    ],
     body: 'Pure black background with gold and purple accents. The text "(YOU)NITY NIGHTS" in large bold distressed stamp-style letters at top. Below that "MORE THAN MOVES — IT\'S CULTURE" in white. The text "FREE MONTHLY EVENT" in a purple badge. Warm community gathering vibe. The text "LIVE PERFORMANCES | WORKSHOPS | OPEN MIC" in white. The text "{schedule}" in gold. At bottom, two lines of white small caps: "DANZVERSITY.COM" and "7531 BURNET RD · AUSTIN, TX 78757".',
   },
 
@@ -305,6 +309,9 @@ const FOOTER_ADDRESS = '7531 BURNET RD · AUSTIN, TX 78757';
 // Shared proof eyebrow — both claims verified (10th year in 2026 + live 5.0★ Google).
 // Update the rating here if it ever moves off 5.0.
 const PROOF_KICKER = '10 YEARS · ★★★★★ ON GOOGLE';
+// AACME / Elevate grant required publicity statement — VERBATIM (do NOT fix the
+// "a Elevate" grammar). Required on every (You)nity Night marketing piece.
+const AACME_STATEMENT = 'This project is supported in part by a Elevate Grant of Austin Arts, Culture, Music and Entertainment.';
 
 const CHASSIS = {
   'summer-camp-evergreen': { layout: 'A', kicker: PROOF_KICKER, headline: 'HIP HOP SUMMER CAMP', subhead: '{dates}', tagline: '{benefit}', infoLines: ['{ages} · WITH {instructor}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/CAMPS', qr: true },
@@ -316,7 +323,7 @@ const CHASSIS = {
   'adult-paid': { layout: 'A-Lite', headline: 'ADULT HIP HOP', subhead: 'FIRST CLASS FREE · NO EXPERIENCE NEEDED', url: 'DANZVERSITY.COM/ADULTS', qr: false },
   'breakin': { layout: 'A', kicker: PROOF_KICKER, headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM', infoLines: ['{time}', '{ages}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/BREAKIN', qr: true },
   'breakin-paid': { layout: 'A-Lite', headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM · {time}', url: 'DANZVERSITY.COM/BREAKIN', qr: false },
-  'younity-nights': { layout: 'B', kicker: PROOF_KICKER, headline: '(YOU)NITY NIGHTS', subhead: 'FREE MONTHLY EVENT', tagline: "MORE THAN MOVES — IT'S CULTURE", infoLines: ['LIVE PERFORMANCES | WORKSHOPS | OPEN MIC', '{schedule}'], url: 'DANZVERSITY.COM', qr: true },
+  'younity-nights': { layout: 'B', kicker: 'FREE · ALL AGES · VISITORS WELCOME', headline: '(YOU)NITY NIGHTS', subhead: '{date} · {time}', tagline: '{lineup}', compliance: AACME_STATEMENT, url: 'DANZVERSITY.COM', qr: true },
   'workshop-internal': { layout: 'A', kicker: PROOF_KICKER, headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
   'workshop-nametalent': { layout: 'B', kicker: PROOF_KICKER, headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
   'battle': { layout: 'B', kicker: PROOF_KICKER, headline: 'DANCE BATTLE', subhead: '1V1 ALL STYLES', infoLines: ['{date}', '{entry}'], urgency: '{urgency}', cta: 'STEP IN THE CYPHER', url: 'DANZVERSITY.COM', qr: true },
@@ -351,6 +358,7 @@ function buildChassis(key, content = {}) {
   if (base.price) { const v = fill(base.price); if (v) spec.price = v; }
   if (base.cta) spec.cta = fill(base.cta);
   if (base.urgency) { const v = fill(base.urgency); if (v) spec.urgency = v; }
+  if (base.compliance) spec.compliance = fill(base.compliance);
   if (base.quote) spec.quote = fill(base.quote);
   if (base.keyword) spec.keyword = fill(base.keyword);
   if (base.reviewer) spec.reviewer = fill(base.reviewer);

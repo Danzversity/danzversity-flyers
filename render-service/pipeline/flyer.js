@@ -8,6 +8,7 @@
 
 const brand = require('../brand');
 const templates = require('../templates');
+const gdrive = require('../integrations/gdrive');
 const { compose } = require('./chassis');
 const { deriveSize, slugify } = require('./derive');
 
@@ -40,6 +41,8 @@ async function composeFlyer(o) {
   const sizeKeys = brand.FAMILY_SIZES[family] || brand.ORGANIC_SIZES;
   const slug = slugify(o.slug || (o.content && o.content.title) || tpl.label);
   const person = spec.layout === 'testimonial' ? null : (o.person || null);
+  // Grant-compliance flyers (e.g. (You)nity) carry the AACME logo — fetched once.
+  const aacmeLogo = spec.compliance ? await gdrive.getAacmeLogo() : null;
 
   const out = [];
   let master = null;
@@ -48,7 +51,7 @@ async function composeFlyer(o) {
   for (const sk of sizeKeys) {
     if (!NATIVE.includes(sk)) continue;
     const sz = brand.sizes[sk];
-    const buf = await compose({ background: o.background, person, width: sz.w, height: sz.h, spec });
+    const buf = await compose({ background: o.background, person, width: sz.w, height: sz.h, spec, aacmeLogo });
     if (sk === '4x5') master = buf;
     out.push(entry(sk, buf, channel, family, slug, true));
   }

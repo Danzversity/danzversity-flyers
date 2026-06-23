@@ -178,4 +178,20 @@ async function saveImages(template, yyyymm, images) {
   return { results, savedCount: results.filter((r) => r.success).length };
 }
 
-module.exports = { isConfigured, saveImages, listImages, downloadFile, uploadImage };
+// ── AACME grant logo (Elevate compliance) ────────────────────────────────────
+// Required on every (You)nity Night marketing piece. The white PNG lives in the
+// FLYERS root (copied from the grant's logo pack), readable by the SA. Fetched
+// once and cached for the process — null if unavailable (e.g. local dev no SA).
+const AACME_LOGO_FILE_ID = '1QcCiVpasdANSDe6OSHGLiOpLBlk43kuo'; // aacme-logo-white.png
+let _aacmeLogo;
+async function getAacmeLogo() {
+  if (_aacmeLogo !== undefined) return _aacmeLogo;
+  try {
+    _aacmeLogo = await downloadFile(AACME_LOGO_FILE_ID);
+  } catch (e) {
+    _aacmeLogo = null;
+  }
+  return _aacmeLogo;
+}
+
+module.exports = { isConfigured, saveImages, listImages, downloadFile, uploadImage, getAacmeLogo };

@@ -64,12 +64,17 @@ function svgStyleA(W, H, spec, opts = {}) {
   }
   if (spec.subhead) L.push(t(spec.subhead, F(opts.headlineBar ? 0.318 : 0.306), F(0.032), WHT));
 
-  // Footer (fixed).
-  if (spec.url) L.push(t(spec.url, F(0.945), F(0.022), WHT, { ls: 2 }));
-  if (spec.address) L.push(t(spec.address, F(0.968), F(0.019), WHT, { ls: 1.5 }));
+  // Footer — lifted to make room for a grant-compliance line when present.
+  const hasCompliance = !!spec.compliance;
+  if (spec.url) L.push(t(spec.url, F(hasCompliance ? 0.905 : 0.945), F(0.022), WHT, { ls: 2 }));
+  if (spec.address) L.push(t(spec.address, F(hasCompliance ? 0.926 : 0.968), F(0.019), WHT, { ls: 1.5 }));
+  if (hasCompliance) {
+    let cy = F(0.950);
+    for (const ln of wrapWords(spec.compliance, 56)) { L.push(t(ln, cy, F(0.0132), WHT, { ls: 0.5 })); cy += F(0.017); }
+  }
 
-  // Bottom block — anchored just above the footer, stacked upward.
-  let y = F(0.912);
+  // Bottom block — anchored above the footer (higher when compliance is present).
+  let y = F(hasCompliance ? 0.872 : 0.912);
   if (spec.cta) {
     const pw = F(0.32), ph = F(0.050), px = cx - pw / 2, py = y - ph;
     L.push(`<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${ph / 2}" fill="${G}"/>`);
@@ -292,6 +297,14 @@ async function compose(o) {
     const tile = await qrTile(spec.qr, qs, spec.cta ? 'SCAN TO REGISTER' : null);
     const tm = await sharp(tile).metadata();
     layers.push({ input: tile, top: H - tm.height - Math.round(H * 0.072), left: W - tm.width - Math.round(W * 0.04) });
+  }
+
+  // AACME grant logo (Elevate compliance) — bottom-left corner.
+  if (o.aacmeLogo) {
+    const lw = Math.round(W * 0.18);
+    const logoBuf = await sharp(o.aacmeLogo).resize({ width: lw }).png().toBuffer();
+    const lm = await sharp(logoBuf).metadata();
+    layers.push({ input: logoBuf, top: H - lm.height - Math.round(H * 0.035), left: Math.round(W * 0.045) });
   }
 
   return base.composite(layers).png({ compressionLevel: 9 }).toBuffer();
