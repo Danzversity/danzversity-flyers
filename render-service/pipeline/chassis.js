@@ -57,7 +57,8 @@ function svgStyleA(W, H, spec, opts = {}) {
   // Top block (logo is composited separately, above this).
   const hSize = F(opts.headlineSize || 0.062);
   // Kicker — eyebrow line above the headline (proof / tenure / credibility).
-  if (spec.kicker) L.push(t(spec.kicker, F(0.205), F(0.023), G, { ls: 3 }));
+  // Positioned relative to the headline size so it clears the big Style-B head.
+  if (spec.kicker) L.push(t(spec.kicker, F(0.262) - hSize - F(0.016), F(0.022), G, { ls: 3 }));
   if (spec.headline) {
     L.push(t(spec.headline, F(0.262), hSize, G));
     if (opts.headlineBar) L.push(`<rect x="${cx - F(0.14)}" y="${F(0.275)}" width="${F(0.28)}" height="${Math.max(3, F(0.006))}" fill="${G}"/>`);
@@ -73,8 +74,9 @@ function svgStyleA(W, H, spec, opts = {}) {
     for (const ln of wrapWords(spec.compliance, 56)) { L.push(t(ln, cy, F(0.0132), WHT, { ls: 0.5 })); cy += F(0.017); }
   }
 
-  // Bottom block — anchored above the footer (higher when compliance is present).
-  let y = F(hasCompliance ? 0.872 : 0.912);
+  // Bottom block — anchored above the footer; lifted well clear of the QR when a
+  // compliance line is present (so a lineup tagline never runs under the code).
+  let y = F(hasCompliance ? 0.83 : 0.912);
   if (spec.cta) {
     const pw = F(0.32), ph = F(0.050), px = cx - pw / 2, py = y - ph;
     L.push(`<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${ph / 2}" fill="${G}"/>`);

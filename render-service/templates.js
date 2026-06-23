@@ -323,7 +323,7 @@ const CHASSIS = {
   'adult-paid': { layout: 'A-Lite', headline: 'ADULT HIP HOP', subhead: 'FIRST CLASS FREE · NO EXPERIENCE NEEDED', url: 'DANZVERSITY.COM/ADULTS', qr: false },
   'breakin': { layout: 'A', kicker: PROOF_KICKER, headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM', infoLines: ['{time}', '{ages}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/BREAKIN', qr: true },
   'breakin-paid': { layout: 'A-Lite', headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM · {time}', url: 'DANZVERSITY.COM/BREAKIN', qr: false },
-  'younity-nights': { layout: 'B', kicker: 'FREE · ALL AGES · VISITORS WELCOME', headline: '(YOU)NITY NIGHTS', subhead: '{date} · {time}', tagline: '{lineup}', compliance: AACME_STATEMENT, url: 'DANZVERSITY.COM', qr: true },
+  'younity-nights': { layout: 'B', kicker: 'FREE · ALL AGES · VISITORS WELCOME', headline: '(YOU)NITY NIGHTS', subhead: '{date} · {time}', tagline: '{lineup}', compliance: AACME_STATEMENT, cta: 'RSVP — FREE', url: 'DANZVERSITY.COM', qr: true },
   'workshop-internal': { layout: 'A', kicker: PROOF_KICKER, headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
   'workshop-nametalent': { layout: 'B', kicker: PROOF_KICKER, headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
   'battle': { layout: 'B', kicker: PROOF_KICKER, headline: 'DANCE BATTLE', subhead: '1V1 ALL STYLES', infoLines: ['{date}', '{entry}'], urgency: '{urgency}', cta: 'STEP IN THE CYPHER', url: 'DANZVERSITY.COM', qr: true },
