@@ -11,6 +11,8 @@
 
 const { google } = require('googleapis');
 const { Readable } = require('stream');
+const https = require('https');
+const crypto = require('crypto');
 const brand = require('../brand');
 
 const SCOPES = ['https://www.googleapis.com/auth/drive'];
@@ -31,10 +33,60 @@ function getCredentials() {
   return creds;
 }
 
+// Mint the service-account access token OURSELVES via node:https.
+//
+// In prod (Node 22 + gaxios 6 / undici), google-auth-library's token POST to
+// googleapis dies with "Premature close" — even though plain GET/POST to the
+// same host works fine (verified: googleapis returns 404s, so the network is
+// healthy). So we sign the JWT with node crypto and POST it with node:https
+// (rock-solid HTTP/1.1), then hand the access token to the Drive client. Token
+// is cached until ~60s before expiry.
+let _token = null;
+
+function b64url(input) {
+  return Buffer.from(input).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+function httpsPostForm(url, body) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) },
+    }, (res) => {
+      let data = '';
+      res.on('data', (c) => { data += c; });
+      res.on('end', () => resolve({ status: res.statusCode, data }));
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+async function getAccessToken() {
+  const now = Math.floor(Date.now() / 1000);
+  if (_token && _token.exp > now) return _token.access_token;
+  const creds = getCredentials();
+  const aud = creds.token_uri || 'https://oauth2.googleapis.com/token';
+  const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const claims = b64url(JSON.stringify({ iss: creds.client_email, scope: SCOPES.join(' '), aud, iat: now, exp: now + 3600 }));
+  const signingInput = `${header}.${claims}`;
+  const signature = b64url(crypto.sign('RSA-SHA256', Buffer.from(signingInput), creds.private_key));
+  const assertion = `${signingInput}.${signature}`;
+  const body = `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${assertion}`;
+  const res = await httpsPostForm(aud, body);
+  if (res.status !== 200) throw new Error(`SA token mint failed (${res.status}): ${String(res.data).slice(0, 200)}`);
+  const json = JSON.parse(res.data);
+  if (!json.access_token) throw new Error('SA token mint: no access_token in response');
+  _token = { access_token: json.access_token, exp: now + (json.expires_in || 3600) - 60 };
+  return _token.access_token;
+}
+
 async function getDrive() {
-  const auth = new google.auth.GoogleAuth({ credentials: getCredentials(), scopes: SCOPES });
-  const client = await auth.getClient();
-  return google.drive({ version: 'v3', auth: client });
+  const token = await getAccessToken();
+  const auth = new google.auth.OAuth2();
+  auth.setCredentials({ access_token: token });
+  return google.drive({ version: 'v3', auth });
 }
 
 /** Find a child folder by name under parent (or anywhere shared, if no parent), else create it. */

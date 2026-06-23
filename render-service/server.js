@@ -117,6 +117,7 @@ app.get('/health', (req, res) => {
     status: 'ok',
     service: 'danzversity-flyer-pipeline',
     version: VERSION,
+    gitCommit: (process.env.RENDER_GIT_COMMIT || 'local').slice(0, 7),
     brandVersion: brand.VERSION,
     driveConfigured: gdrive.isConfigured(),
     ideogramConfigured: ideogram.isConfigured(),
