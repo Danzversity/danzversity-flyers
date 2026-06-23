@@ -47,7 +47,14 @@ function wrapWords(s, maxChars) {
 function svgStyleA(W, H, spec, opts = {}) {
   const cx = W / 2, F = (f) => Math.round(H * f);
   const topH = F(opts.scrimTop || 0.34), botStart = F(0.55);
-  const t = (s, y, size, fill, o = {}) => `<text x="${o.x || cx}" y="${y}" font-size="${size}" fill="${fill}" text-anchor="middle" letter-spacing="${o.ls || 1}">${esc(s)}</text>`;
+  // Text helper. Pass o.maxW to compress a line that would overflow that width
+  // (Bebas is condensed; ~0.58em/char estimate) so long content never hits the edge.
+  const t = (s, y, size, fill, o = {}) => {
+    const ls = o.ls || 1;
+    let fit = '';
+    if (o.maxW) { const est = String(s).length * (size * 0.58 + ls); if (est > o.maxW) fit = ` textLength="${Math.round(o.maxW)}" lengthAdjust="spacingAndGlyphs"`; }
+    return `<text x="${o.x || cx}" y="${y}" font-size="${size}" fill="${fill}" text-anchor="middle" letter-spacing="${ls}"${fit}>${esc(s)}</text>`;
+  };
   const L = [`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`, defs(topH, botStart)];
 
   // Extra scrim panel concentrated behind the lower info block — locks legibility
@@ -58,12 +65,12 @@ function svgStyleA(W, H, spec, opts = {}) {
   const hSize = F(opts.headlineSize || 0.062);
   // Kicker — eyebrow line above the headline (proof / tenure / credibility).
   // Positioned relative to the headline size so it clears the big Style-B head.
-  if (spec.kicker) L.push(t(spec.kicker, F(0.262) - hSize - F(0.016), F(0.022), G, { ls: 3 }));
+  if (spec.kicker) L.push(t(spec.kicker, F(0.262) - hSize - F(0.016), F(0.022), G, { ls: 3, maxW: W * 0.9 }));
   if (spec.headline) {
-    L.push(t(spec.headline, F(0.262), hSize, G));
+    L.push(t(spec.headline, F(0.262), hSize, G, { maxW: W * 0.9 }));
     if (opts.headlineBar) L.push(`<rect x="${cx - F(0.14)}" y="${F(0.275)}" width="${F(0.28)}" height="${Math.max(3, F(0.006))}" fill="${G}"/>`);
   }
-  if (spec.subhead) L.push(t(spec.subhead, F(opts.headlineBar ? 0.318 : 0.306), F(0.032), WHT));
+  if (spec.subhead) L.push(t(spec.subhead, F(opts.headlineBar ? 0.318 : 0.306), F(0.032), WHT, { maxW: W * 0.88 }));
 
   // Footer — lifted to make room for a grant-compliance line when present.
   const hasCompliance = !!spec.compliance;
@@ -80,7 +87,7 @@ function svgStyleA(W, H, spec, opts = {}) {
   if (spec.cta) {
     const pw = F(0.32), ph = F(0.050), px = cx - pw / 2, py = y - ph;
     L.push(`<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${ph / 2}" fill="${G}"/>`);
-    L.push(t(spec.cta, py + ph * 0.70, F(0.030), BLK));
+    L.push(t(spec.cta, py + ph * 0.70, F(0.030), BLK, { maxW: pw * 0.9 }));
     y = py - F(0.024);
   }
   // Urgency strip — gold-outlined badge just above the CTA (scarcity / deadline).
@@ -92,11 +99,11 @@ function svgStyleA(W, H, spec, opts = {}) {
     L.push(t(spec.urgency, uy + uh * 0.66, F(0.0235), G, { ls: 1.5 }));
     y = uy - F(0.024);
   }
-  if (spec.price) { L.push(t(spec.price, y, F(0.035), G)); y -= F(0.046); }
+  if (spec.price) { L.push(t(spec.price, y, F(0.035), G, { maxW: W * 0.88 })); y -= F(0.046); }
   const info = (spec.infoLines || []).filter(Boolean).slice().reverse();
-  for (const line of info) { L.push(t(line, y, F(0.028), WHT)); y -= F(0.035); }
+  for (const line of info) { L.push(t(line, y, F(0.028), WHT, { maxW: W * 0.9 })); y -= F(0.035); }
   if (info.length || spec.price) { L.push(`<rect x="${cx - F(0.10)}" y="${y}" width="${F(0.20)}" height="${Math.max(2, F(0.004))}" fill="${G}"/>`); y -= F(0.030); }
-  if (spec.tagline) L.push(t(spec.tagline, y, F(0.030), WHT));
+  if (spec.tagline) L.push(t(spec.tagline, y, F(0.030), WHT, { maxW: W * 0.9 }));
 
   L.push('</svg>');
   return L.join('');
@@ -159,7 +166,7 @@ async function qrTile(data, qs, label) {
     `<svg width="${tw}" height="${th}" xmlns="http://www.w3.org/2000/svg"><defs>` +
     `<style>@font-face{font-family:'Bebas Neue';src:url(data:font/ttf;base64,${fontB64()}) format('truetype');}text{font-family:'Bebas Neue',sans-serif;}</style></defs>` +
     `<rect x="0" y="0" width="${tw}" height="${th}" rx="${Math.round(pad * 1.1)}" fill="#FFFFFF"/>` +
-    (label ? `<text x="${tw / 2}" y="${qs + pad * 2 + Math.round(labelH * 0.70)}" font-size="${Math.round(labelH * 0.6)}" fill="#000000" text-anchor="middle" letter-spacing="1.5">${esc(label)}</text>` : '') +
+    (label ? `<text x="${tw / 2}" y="${qs + pad * 2 + Math.round(labelH * 0.70)}" font-size="${Math.round(labelH * 0.6)}" fill="#000000" text-anchor="middle" letter-spacing="1" textLength="${tw - pad}" lengthAdjust="spacingAndGlyphs">${esc(label)}</text>` : '') +
     `</svg>`;
   const qr = await qrPng(data, qs);
   return sharp(Buffer.from(svg)).composite([{ input: qr, top: pad, left: pad }]).png().toBuffer();
