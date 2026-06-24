@@ -70,20 +70,20 @@ function svgStyleA(W, H, spec, opts = {}) {
   L.push(`<rect x="0" y="${F(0.58)}" width="100%" height="${F(0.42)}" fill="url(#ps)"/>`);
 
   // Top block (logo is composited separately, above this).
-  const hSize = F(opts.headlineSize || 0.062);
+  const hSize = F(opts.headlineSize || 0.048);
   // Kicker — eyebrow line above the headline (proof / tenure / credibility).
   // Positioned relative to the headline size so it clears the big Style-B head.
-  if (spec.kicker) L.push(t(spec.kicker, F(0.262) - hSize - F(0.016), F(0.021), G, { ls: 2, maxW: W * 0.9 }));
+  if (spec.kicker) L.push(t(spec.kicker, F(0.258) - hSize - F(0.013), F(0.0165), G, { ls: 2, maxW: W * 0.78 }));
   if (spec.headline) {
-    L.push(t(spec.headline, F(0.262), hSize, G, { maxW: W * 0.9, font: 'bebas' }));
+    L.push(t(spec.headline, F(0.258), hSize, G, { maxW: W * 0.80, font: 'bebas' }));
     if (opts.headlineBar) L.push(`<rect x="${cx - F(0.14)}" y="${F(0.275)}" width="${F(0.28)}" height="${Math.max(3, F(0.006))}" fill="${G}"/>`);
   }
-  if (spec.subhead) L.push(t(spec.subhead, F(opts.headlineBar ? 0.318 : 0.306), F(0.032), WHT, { maxW: W * 0.88 }));
+  if (spec.subhead) L.push(t(spec.subhead, F(opts.headlineBar ? 0.312 : 0.300), F(0.0225), WHT, { maxW: W * 0.72 }));
 
   // Footer — lifted to make room for a grant-compliance line when present.
   const hasCompliance = !!spec.compliance;
-  if (spec.url) L.push(t(spec.url, F(hasCompliance ? 0.905 : 0.945), F(0.022), WHT, { ls: 2 }));
-  if (spec.address) L.push(t(spec.address, F(hasCompliance ? 0.926 : 0.968), F(0.019), WHT, { ls: 1.5 }));
+  if (spec.url) L.push(t(spec.url, F(hasCompliance ? 0.905 : 0.945), F(0.0185), WHT, { ls: 1.5 }));
+  if (spec.address) L.push(t(spec.address, F(hasCompliance ? 0.924 : 0.966), F(0.016), WHT, { ls: 1 }));
   if (hasCompliance) {
     let cy = F(0.950);
     for (const ln of wrapWords(spec.compliance, 56)) { L.push(t(ln, cy, F(0.0132), WHT, { ls: 0.5 })); cy += F(0.017); }
@@ -95,7 +95,7 @@ function svgStyleA(W, H, spec, opts = {}) {
   if (spec.cta) {
     const pw = F(0.32), ph = F(0.050), px = cx - pw / 2, py = y - ph;
     L.push(`<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${ph / 2}" fill="${G}"/>`);
-    L.push(t(spec.cta, py + ph * 0.70, F(0.032), BLK, { maxW: pw * 0.9, font: 'bebas' }));
+    L.push(t(spec.cta, py + ph * 0.70, F(0.026), BLK, { maxW: pw * 0.85, font: 'bebas' }));
     y = py - F(0.024);
   }
   // Urgency strip — gold-outlined badge just above the CTA (scarcity / deadline).
@@ -104,14 +104,14 @@ function svgStyleA(W, H, spec, opts = {}) {
     const uw = Math.min(F(0.80), Math.max(F(0.34), spec.urgency.length * F(0.0142) + F(0.06)));
     const uy = y - uh;
     L.push(`<rect x="${cx - uw / 2}" y="${uy}" width="${uw}" height="${uh}" rx="${uh / 2}" fill="#000000" fill-opacity="0.35" stroke="${G}" stroke-width="${Math.max(2, F(0.0032))}"/>`);
-    L.push(t(spec.urgency, uy + uh * 0.66, F(0.0245), G, { ls: 1.5, font: 'bebas' }));
+    L.push(t(spec.urgency, uy + uh * 0.66, F(0.020), G, { ls: 1, font: 'bebas' }));
     y = uy - F(0.024);
   }
-  if (spec.price) { L.push(t(spec.price, y, F(0.037), G, { maxW: W * 0.88, font: 'bebas' })); y -= F(0.05); }
+  if (spec.price) { L.push(t(spec.price, y, F(0.030), G, { maxW: W * 0.78, font: 'bebas' })); y -= F(0.043); }
   const info = (spec.infoLines || []).filter(Boolean).slice().reverse();
-  for (const line of info) { L.push(t(line, y, F(0.026), WHT, { maxW: W * 0.9 })); y -= F(0.033); }
+  for (const line of info) { L.push(t(line, y, F(0.0215), WHT, { maxW: W * 0.80 })); y -= F(0.028); }
   if (info.length || spec.price) { L.push(`<rect x="${cx - F(0.10)}" y="${y}" width="${F(0.20)}" height="${Math.max(2, F(0.004))}" fill="${G}"/>`); y -= F(0.030); }
-  if (spec.tagline) L.push(t(spec.tagline, y, F(0.033), WHT, { maxW: W * 0.9, font: 'bebas' }));
+  if (spec.tagline) L.push(t(spec.tagline, y, F(0.027), WHT, { maxW: W * 0.80, font: 'bebas' }));
 
   L.push('</svg>');
   return L.join('');
