@@ -61,7 +61,7 @@ function svgStyleA(W, H, spec, opts = {}) {
     const fam = o.font === 'bebas' ? 'Bebas Neue' : 'Inter';
     let sz = size;
     if (o.maxW) { const est = String(s).length * (sz * (fam === 'Bebas Neue' ? 0.56 : 0.60) + ls); if (est > o.maxW) sz = Math.floor(sz * o.maxW / est); }
-    return `<text x="${o.x || cx}" y="${y}" font-family="${fam}" font-size="${sz}" fill="${fill}" text-anchor="middle" letter-spacing="${ls}">${esc(s)}</text>`;
+    return `<text x="${o.x || cx}" y="${y}" style="font-family:'${fam}'" font-size="${sz}" fill="${fill}" text-anchor="middle" letter-spacing="${ls}">${esc(s)}</text>`;
   };
   const L = [`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`, defs(topH, botStart)];
 
