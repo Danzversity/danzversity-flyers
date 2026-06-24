@@ -37,6 +37,24 @@ const gdrive = require('./integrations/gdrive');
 const ideogram = require('./integrations/ideogram');
 const removebg = require('./integrations/removebg');
 
+// Install the bundled fonts where fontconfig looks. Render's librsvg IGNORES the
+// @font-face data-URIs embedded in the chassis SVG and resolves fonts through
+// fontconfig — so without this, every flyer renders in a fallback sans instead of
+// Bebas/Inter (looked fine locally, wrong in prod). Copy the TTFs into the common
+// user font dirs + refresh the cache, before any compose runs.
+(function installFonts() {
+  try {
+    const fs = require('fs'), os = require('os'), cp = require('child_process');
+    const srcDir = path.join(__dirname, '..', 'fonts');
+    const ttfs = fs.readdirSync(srcDir).filter((f) => f.toLowerCase().endsWith('.ttf'));
+    for (const dir of [path.join(os.homedir(), '.fonts'), path.join(os.homedir(), '.local', 'share', 'fonts')]) {
+      try { fs.mkdirSync(dir, { recursive: true }); for (const f of ttfs) fs.copyFileSync(path.join(srcDir, f), path.join(dir, f)); } catch (_) { /* dir not writable */ }
+    }
+    try { cp.execSync('fc-cache -f', { stdio: 'ignore' }); } catch (_) { /* fontconfig auto-scans ~/.fonts */ }
+    console.log('fonts installed for fontconfig:', ttfs.join(', '));
+  } catch (e) { console.warn('font install skipped:', e.message); }
+})();
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 const VERSION = '1.0.0';
