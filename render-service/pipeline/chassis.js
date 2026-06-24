@@ -68,13 +68,16 @@ function svgStyleA(W, H, spec, opts = {}) {
 
   // Top block (logo is composited separately, above this).
   const hSize = F(opts.headlineSize || 0.062);
+  // topShift drops the whole title block (kicker → subhead) for more air under the
+  // logo. Layout B passes it; layout A (Camp) passes none, so its blessed spacing holds.
+  const ts = F(opts.topShift || 0);
   // Kicker — eyebrow line above the headline (proof / tenure / credibility).
-  if (spec.kicker) L.push(t(spec.kicker, F(0.205), F(0.023), G, { ls: 3, maxW: W * 0.9 }));
+  if (spec.kicker) L.push(t(spec.kicker, F(0.205) + ts, F(0.023), G, { ls: 3, maxW: W * 0.9 }));
   if (spec.headline) {
-    L.push(t(spec.headline, F(0.262), hSize, G, { maxW: W * 0.9 }));
-    if (opts.headlineBar) L.push(`<rect x="${cx - F(0.14)}" y="${F(0.275)}" width="${F(0.28)}" height="${Math.max(3, F(0.006))}" fill="${G}"/>`);
+    L.push(t(spec.headline, F(0.262) + ts, hSize, G, { maxW: W * 0.9 }));
+    if (opts.headlineBar) L.push(`<rect x="${cx - F(0.14)}" y="${F(0.275) + ts}" width="${F(0.28)}" height="${Math.max(3, F(0.006))}" fill="${G}"/>`);
   }
-  if (spec.subhead) L.push(t(spec.subhead, F(opts.headlineBar ? 0.318 : 0.306), F(0.032), WHT, { maxW: W * 0.88 }));
+  if (spec.subhead) L.push(t(spec.subhead, F(opts.headlineBar ? 0.318 : 0.306) + ts, F(0.032), WHT, { maxW: W * 0.88 }));
 
   // Footer — lifted to make room for a grant-compliance line when present.
   const hasCompliance = !!spec.compliance;
@@ -152,7 +155,7 @@ function chassisSVG(W, H, spec) {
   const layout = spec.layout || 'A';
   if (layout === 'A-Lite') return svgALite(W, H, spec);
   if (layout === 'testimonial') return svgTestimonial(W, H, spec);
-  if (layout === 'B') return svgStyleA(W, H, spec, { headlineSize: 0.080, headlineBar: true, scrimTop: 0.40 });
+  if (layout === 'B') return svgStyleA(W, H, spec, { headlineSize: 0.080, headlineBar: true, scrimTop: 0.40, topShift: 0.045 });
   return svgStyleA(W, H, spec, { headlineSize: 0.062 });
 }
 

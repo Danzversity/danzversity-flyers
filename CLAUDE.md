@@ -21,7 +21,7 @@ Add via the tool ("+ Add background" / "Upload photo") or by dropping files stra
 
 ## Chassis (`pipeline/chassis.js`) — the deterministic layer
 
-SVG with Bebas Neue embedded base64 → composited over background (+ person) with Sharp. Layouts dispatch on `spec.layout`: **A** (standard) · **A-Lite** (paid, photo-dominant, minimal, no QR) · **B** (hype) · **testimonial** (quote). Dark scrims keep text legible on any plate. Per-product content lives in `templates.js` `CHASSIS` / `buildChassis()`.
+SVG with Bebas Neue + Inter embedded base64, **and** the same TTFs installed into fontconfig at server startup (librsvg ignores the `@font-face` data-URIs on Render — see Discipline) → composited over background (+ person) with Sharp. Layouts dispatch on `spec.layout`: **A** (standard) · **A-Lite** (paid, photo-dominant, minimal, no QR) · **B** (hype) · **testimonial** (quote). Dark scrims keep text legible on any plate. Per-product content lives in `templates.js` `CHASSIS` / `buildChassis()`.
 
 `pipeline/flyer.js` `composeFlyer()` renders the chassis **natively** at the portrait masters (4:5, 1:1, 9:16) for crispness, and **derives** the wide sizes from the 4:5 master.
 
@@ -78,4 +78,5 @@ npm start                                  # http://localhost:3001
 - The chassis is code-locked and deterministic — keep it that way.
 - Real-people photos live only in the private Drive, never committed.
 - **Drive auth/REST is hand-rolled over `node:https` in `integrations/gdrive.js` — do NOT reintroduce the `googleapis` library.** On Render (Node 22 + gaxios/undici) every googleapis call dies with "Premature close"; node:https works. We sign the SA JWT with node crypto and hit the Drive REST API directly.
+- **Fonts MUST be installed into fontconfig on the host — base64 `@font-face` is NOT enough.** Render's librsvg silently IGNORES the SVG `@font-face` data-URI embeds and falls back to a generic sans (wide, edge-to-edge, "amateur" lettering). `server.js` copies the bundled TTFs (`fonts/*.ttf`) into `~/.fonts` + `~/.local/share/fonts` and runs `fc-cache -f` at startup, because fontconfig is what librsvg actually consults. Local dev had the fonts system-wide, so **local always looked right while prod silently didn't** — ALWAYS verify the actual prod render, never a local one. A missing font is invisible in code and obvious on the page. (Root cause of the 6/23 "amateur lettering" saga; fixed `30726b0`.)
 - **(You)nity flyers are AACME/Elevate grant-compliant** — the `younity-nights` template MUST keep the verbatim publicity statement (don't fix "a Elevate"), the AACME logo, tourist-welcoming copy, AND the RSVP/registration QR (attendance tracking is a grant obligation). Never strip these.
