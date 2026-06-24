@@ -22,6 +22,11 @@ const G = brand.palette.gold, WHT = brand.palette.textPrimary, BLK = brand.palet
 
 let _fontB64 = null;
 function fontB64() { if (_fontB64 == null) _fontB64 = fs.readFileSync(FONT_PATH).toString('base64'); return _fontB64; }
+// Inter (subset, Medium) — the brand body font. Bebas is display-only; Inter
+// carries all the supporting text so flyers don't read as one mono display font.
+const INTER_PATH = path.join(__dirname, '..', '..', 'fonts', 'Inter-Body.ttf');
+let _interB64 = null;
+function interB64() { if (_interB64 == null) _interB64 = fs.readFileSync(INTER_PATH).toString('base64'); return _interB64; }
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
 function defs(topH, botStart) {
@@ -29,7 +34,7 @@ function defs(topH, botStart) {
     <linearGradient id="ts" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0.9"/><stop offset="0.6" stop-color="#000" stop-opacity="0.4"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
     <linearGradient id="bs" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0.97"/><stop offset="0.5" stop-color="#000" stop-opacity="0.82"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
     <linearGradient id="ps" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.55" stop-color="#000" stop-opacity="0.35"/><stop offset="1" stop-color="#000" stop-opacity="0.62"/></linearGradient>
-    <style>@font-face{font-family:'Bebas Neue';src:url(data:font/ttf;base64,${fontB64()}) format('truetype');}text{font-family:'Bebas Neue',sans-serif;}</style>
+    <style>@font-face{font-family:'Bebas Neue';src:url(data:font/ttf;base64,${fontB64()}) format('truetype');}@font-face{font-family:'Inter';src:url(data:font/ttf;base64,${interB64()}) format('truetype');}text{font-family:'Bebas Neue',sans-serif;}</style>
   </defs>
   <rect x="0" y="0" width="100%" height="${topH}" fill="url(#ts)"/>
   <rect x="0" y="${botStart}" width="100%" height="${100}%" fill="url(#bs)"/>`;
@@ -49,11 +54,14 @@ function svgStyleA(W, H, spec, opts = {}) {
   const topH = F(opts.scrimTop || 0.34), botStart = F(0.55);
   // Text helper. Pass o.maxW to compress a line that would overflow that width
   // (Bebas is condensed; ~0.58em/char estimate) so long content never hits the edge.
+  // Text helper. Default font is Inter (body); pass o.font:'bebas' for the display
+  // headline. o.maxW shrinks the FONT SIZE (keeps letterforms) if a line would overflow.
   const t = (s, y, size, fill, o = {}) => {
     const ls = o.ls || 1;
-    let fit = '';
-    if (o.maxW) { const est = String(s).length * (size * 0.58 + ls); if (est > o.maxW) fit = ` textLength="${Math.round(o.maxW)}" lengthAdjust="spacingAndGlyphs"`; }
-    return `<text x="${o.x || cx}" y="${y}" font-size="${size}" fill="${fill}" text-anchor="middle" letter-spacing="${ls}"${fit}>${esc(s)}</text>`;
+    const fam = o.font === 'bebas' ? 'Bebas Neue' : 'Inter';
+    let sz = size;
+    if (o.maxW) { const est = String(s).length * (sz * (fam === 'Bebas Neue' ? 0.56 : 0.60) + ls); if (est > o.maxW) sz = Math.floor(sz * o.maxW / est); }
+    return `<text x="${o.x || cx}" y="${y}" font-family="${fam}" font-size="${sz}" fill="${fill}" text-anchor="middle" letter-spacing="${ls}">${esc(s)}</text>`;
   };
   const L = [`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`, defs(topH, botStart)];
 
@@ -67,7 +75,7 @@ function svgStyleA(W, H, spec, opts = {}) {
   // Positioned relative to the headline size so it clears the big Style-B head.
   if (spec.kicker) L.push(t(spec.kicker, F(0.262) - hSize - F(0.016), F(0.022), G, { ls: 3, maxW: W * 0.9 }));
   if (spec.headline) {
-    L.push(t(spec.headline, F(0.262), hSize, G, { maxW: W * 0.9 }));
+    L.push(t(spec.headline, F(0.262), hSize, G, { maxW: W * 0.9, font: 'bebas' }));
     if (opts.headlineBar) L.push(`<rect x="${cx - F(0.14)}" y="${F(0.275)}" width="${F(0.28)}" height="${Math.max(3, F(0.006))}" fill="${G}"/>`);
   }
   if (spec.subhead) L.push(t(spec.subhead, F(opts.headlineBar ? 0.318 : 0.306), F(0.032), WHT, { maxW: W * 0.88 }));
