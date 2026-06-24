@@ -33,7 +33,7 @@ function defs(topH, botStart) {
   return `<defs>
     <linearGradient id="ts" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0.9"/><stop offset="0.6" stop-color="#000" stop-opacity="0.4"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
     <linearGradient id="bs" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0.97"/><stop offset="0.5" stop-color="#000" stop-opacity="0.82"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
-    <linearGradient id="ps" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.55" stop-color="#000" stop-opacity="0.35"/><stop offset="1" stop-color="#000" stop-opacity="0.62"/></linearGradient>
+    <linearGradient id="ps" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.45" stop-color="#000" stop-opacity="0.62"/><stop offset="1" stop-color="#000" stop-opacity="0.9"/></linearGradient>
     <style>@font-face{font-family:'Bebas Neue';src:url(data:font/ttf;base64,${fontB64()}) format('truetype');}@font-face{font-family:'Inter';src:url(data:font/ttf;base64,${interB64()}) format('truetype');}text{font-family:'Bebas Neue',sans-serif;}</style>
   </defs>
   <rect x="0" y="0" width="100%" height="${topH}" fill="url(#ts)"/>
@@ -67,13 +67,13 @@ function svgStyleA(W, H, spec, opts = {}) {
 
   // Extra scrim panel concentrated behind the lower info block — locks legibility
   // of the tagline / info / price over busy plates without darkening the photo band.
-  L.push(`<rect x="0" y="${F(0.60)}" width="100%" height="${F(0.40)}" fill="url(#ps)"/>`);
+  L.push(`<rect x="0" y="${F(0.58)}" width="100%" height="${F(0.42)}" fill="url(#ps)"/>`);
 
   // Top block (logo is composited separately, above this).
   const hSize = F(opts.headlineSize || 0.062);
   // Kicker — eyebrow line above the headline (proof / tenure / credibility).
   // Positioned relative to the headline size so it clears the big Style-B head.
-  if (spec.kicker) L.push(t(spec.kicker, F(0.262) - hSize - F(0.016), F(0.022), G, { ls: 3, maxW: W * 0.9 }));
+  if (spec.kicker) L.push(t(spec.kicker, F(0.262) - hSize - F(0.016), F(0.021), G, { ls: 2, maxW: W * 0.9 }));
   if (spec.headline) {
     L.push(t(spec.headline, F(0.262), hSize, G, { maxW: W * 0.9, font: 'bebas' }));
     if (opts.headlineBar) L.push(`<rect x="${cx - F(0.14)}" y="${F(0.275)}" width="${F(0.28)}" height="${Math.max(3, F(0.006))}" fill="${G}"/>`);
@@ -95,7 +95,7 @@ function svgStyleA(W, H, spec, opts = {}) {
   if (spec.cta) {
     const pw = F(0.32), ph = F(0.050), px = cx - pw / 2, py = y - ph;
     L.push(`<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${ph / 2}" fill="${G}"/>`);
-    L.push(t(spec.cta, py + ph * 0.70, F(0.030), BLK, { maxW: pw * 0.9 }));
+    L.push(t(spec.cta, py + ph * 0.70, F(0.032), BLK, { maxW: pw * 0.9, font: 'bebas' }));
     y = py - F(0.024);
   }
   // Urgency strip — gold-outlined badge just above the CTA (scarcity / deadline).
@@ -104,14 +104,14 @@ function svgStyleA(W, H, spec, opts = {}) {
     const uw = Math.min(F(0.80), Math.max(F(0.34), spec.urgency.length * F(0.0142) + F(0.06)));
     const uy = y - uh;
     L.push(`<rect x="${cx - uw / 2}" y="${uy}" width="${uw}" height="${uh}" rx="${uh / 2}" fill="#000000" fill-opacity="0.35" stroke="${G}" stroke-width="${Math.max(2, F(0.0032))}"/>`);
-    L.push(t(spec.urgency, uy + uh * 0.66, F(0.0235), G, { ls: 1.5 }));
+    L.push(t(spec.urgency, uy + uh * 0.66, F(0.0245), G, { ls: 1.5, font: 'bebas' }));
     y = uy - F(0.024);
   }
-  if (spec.price) { L.push(t(spec.price, y, F(0.035), G, { maxW: W * 0.88 })); y -= F(0.046); }
+  if (spec.price) { L.push(t(spec.price, y, F(0.037), G, { maxW: W * 0.88, font: 'bebas' })); y -= F(0.05); }
   const info = (spec.infoLines || []).filter(Boolean).slice().reverse();
-  for (const line of info) { L.push(t(line, y, F(0.028), WHT, { maxW: W * 0.9 })); y -= F(0.035); }
+  for (const line of info) { L.push(t(line, y, F(0.026), WHT, { maxW: W * 0.9 })); y -= F(0.033); }
   if (info.length || spec.price) { L.push(`<rect x="${cx - F(0.10)}" y="${y}" width="${F(0.20)}" height="${Math.max(2, F(0.004))}" fill="${G}"/>`); y -= F(0.030); }
-  if (spec.tagline) L.push(t(spec.tagline, y, F(0.030), WHT, { maxW: W * 0.9 }));
+  if (spec.tagline) L.push(t(spec.tagline, y, F(0.033), WHT, { maxW: W * 0.9, font: 'bebas' }));
 
   L.push('</svg>');
   return L.join('');
@@ -310,10 +310,10 @@ async function compose(o) {
   }
 
   if (spec.qr) {
-    const qs = Math.round(W * 0.13);
+    const qs = Math.round(W * 0.155);
     const tile = await qrTile(spec.qr, qs, spec.cta ? 'SCAN TO REGISTER' : null);
     const tm = await sharp(tile).metadata();
-    layers.push({ input: tile, top: H - tm.height - Math.round(H * 0.072), left: W - tm.width - Math.round(W * 0.04) });
+    layers.push({ input: tile, top: H - tm.height - Math.round(H * 0.05), left: W - tm.width - Math.round(W * 0.045) });
   }
 
   // AACME grant logo (Elevate compliance) — bottom-left corner.

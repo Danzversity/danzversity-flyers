@@ -308,7 +308,7 @@ function expandContent(template, content) {
 const FOOTER_ADDRESS = '7531 BURNET RD · AUSTIN, TX 78757';
 // Shared proof eyebrow — both claims verified (10th year in 2026 + live 5.0★ Google).
 // Update the rating here if it ever moves off 5.0.
-const PROOF_KICKER = '10 YEARS · ★★★★★ ON GOOGLE';
+const PROOF_KICKER = 'EST. 2016 · 5.0★ ON GOOGLE';
 // AACME / Elevate grant required publicity statement — VERBATIM (do NOT fix the
 // "a Elevate" grammar). Required on every (You)nity Night marketing piece.
 const AACME_STATEMENT = 'This project is supported in part by a Elevate Grant of Austin Arts, Culture, Music and Entertainment.';
