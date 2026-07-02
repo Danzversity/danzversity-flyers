@@ -27,6 +27,9 @@ async function cutout(buffer) {
     const txt = await res.text().catch(() => '');
     throw new Error(`Remove.bg ${res.status}: ${txt.slice(0, 200)}`);
   }
+  // Spend telemetry — Remove.bg bills one credit per successful cutout.
+  // (cutoutCached() cache hits never reach here, so they cost — and report — nothing.)
+  require('./telemetry').reportSpend('removebg', 1);
   return Buffer.from(await res.arrayBuffer());
 }
 

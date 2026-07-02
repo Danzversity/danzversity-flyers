@@ -288,12 +288,32 @@ function renderGrid() {
     node.querySelector('.tile-dims').textContent = `${img.width}×${img.height}`;
     node.querySelectorAll('.seg-btn').forEach((b) => { b.classList.toggle('active', b.dataset.policy === (img.native ? 'native' : img.policy)); b.style.display = img.native ? 'none' : ''; b.addEventListener('click', () => reDerive(idx, b.dataset.policy)); });
     node.querySelector('.dl-one').addEventListener('click', () => downloadOne(img));
+    node.querySelector('.post-one').addEventListener('click', () => postToSocial(img));
     grid.appendChild(node);
   });
 }
 async function reDerive(idx, policy) {
   const img = state.images[idx]; if (!img || img.native) return; // native masters aren't re-derived
   toast('Re-crop needs the master in the ② panel.', 'err');
+}
+
+// ── Social (danzversity-social rail: preview → confirm → send) ──────────────
+async function postToSocial(img) {
+  const caption = window.prompt('Caption for Facebook + Instagram:', '');
+  if (caption === null) return; // cancelled
+  const platforms = window.confirm('Post to BOTH Facebook and Instagram?\nOK = both · Cancel = Facebook only')
+    ? ['facebook', 'instagram'] : ['facebook'];
+  try {
+    toast('Composing preview…', 'ok');
+    const prev = await (await fetch(`${API}/post-social`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64: img.base64, caption, platforms, mode: 'preview' }) })).json();
+    if (!prev.ok) throw new Error(prev.error || 'preview failed');
+    if (!window.confirm(`Preview OK — really POST this now?\n\n${img.label} (${img.width}×${img.height})\nPlatforms: ${platforms.join(' + ')}\nCaption: ${caption || '(none)'}`)) return;
+    const sent = await (await fetch(`${API}/post-social`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64: img.base64, caption, platforms, mode: 'send' }) })).json();
+    if (!sent.ok) throw new Error(sent.error || 'send failed');
+    toast('Posted to ' + platforms.join(' + ') + ' 🎉', 'ok');
+  } catch (e) { toast('Social post failed: ' + e.message, 'err'); }
 }
 
 // ── Downloads ───────────────────────────────────────────────────────────────

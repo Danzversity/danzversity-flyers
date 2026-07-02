@@ -36,6 +36,7 @@ const library = require('./pipeline/library');
 const gdrive = require('./integrations/gdrive');
 const ideogram = require('./integrations/ideogram');
 const removebg = require('./integrations/removebg');
+const social = require('./integrations/social');
 
 // Install the bundled fonts where fontconfig looks. Render's librsvg IGNORES the
 // @font-face data-URIs embedded in the chassis SVG and resolves fonts through
@@ -57,7 +58,7 @@ const removebg = require('./integrations/removebg');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.0.0';
+const VERSION = '1.1.0'; // 1.1.0: social rail bridge + /pub tokens + OCR text gate + spend telemetry + camp weeks 4/5 date fix
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -78,6 +79,10 @@ const FLYERS_PASSWORD = process.env.FLYERS_PASSWORD || '';
 if (FLYERS_PASSWORD) {
   app.use((req, res, next) => {
     if (req.path === '/health') return next();
+    // /pub/:token — auth-exempt public serving of freshly rendered flyers so
+    // Meta's Graph API can fetch them for social posts. Tokens are 48-hex-char
+    // unguessable, unlisted, and expire in 1h (integrations/social.js).
+    if (req.path.startsWith('/pub/')) return next();
     const [scheme, encoded] = (req.headers.authorization || '').split(' ');
     if (scheme === 'Basic' && encoded) {
       const [u, p] = Buffer.from(encoded, 'base64').toString().split(':');
@@ -140,12 +145,70 @@ app.get('/health', (req, res) => {
     driveConfigured: gdrive.isConfigured(),
     ideogramConfigured: ideogram.isConfigured(),
     removebgConfigured: removebg.isConfigured(),
+    socialConfigured: social.isConfigured(),
+    spendTelemetry: !!process.env.CHECKOUT_RAIL_KEY,
     library: library.status(),
     templateCount: templates.TEMPLATES.length,
     families: Object.values(brand.families).map((f) => ({ key: f.key, label: f.label, channel: f.channel })),
     sizes: Object.values(brand.sizes).map((s) => ({ key: s.key, label: s.label, w: s.w, h: s.h })),
     bundles: Object.values(brand.bundles).map((b) => ({ key: b.key, label: b.label, sizes: b.sizes })),
   });
+});
+
+// ── Public token serving (auth-exempt, see middleware) ──────────────────────
+app.get('/pub/:token.jpg', (req, res) => {
+  const entry = social.getPublic(req.params.token);
+  if (!entry) return res.status(404).send('gone');
+  res.setHeader('Content-Type', entry.type);
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.send(entry.buffer);
+});
+
+// ── Post a rendered flyer to social (danzversity-social rail) ───────────────
+// Body: { base64, caption, platforms?, mode? ('preview' default | 'send'), link? }
+// preview → the rail composes but does NOT post; send → posts to FB/IG.
+app.post('/post-social', async (req, res) => {
+  try {
+    const { base64, caption = '', platforms, mode = 'preview', link } = req.body || {};
+    if (!base64) return res.status(400).json({ ok: false, error: 'base64 image required' });
+    if (!social.isConfigured()) return res.status(503).json({ ok: false, error: 'SOCIAL_RAIL_KEY not set on the server (Render env).' });
+    // Meta wants JPEG — transcode whatever family/size PNG comes in.
+    const jpeg = await sharp(Buffer.from(base64, 'base64')).jpeg({ quality: 92 }).toBuffer();
+    const result = await social.post({ imageBuffer: jpeg, caption, platforms, mode, link });
+    res.json({ ok: true, mode, result });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── Text-accuracy gate (experimental) ────────────────────────────────────────
+// Ideogram still fumbles small text. POST { base64, expected: ["WEEK 4", ...] }
+// → OCRs the image (tesseract.js, lazy-loaded so a wasm problem can never
+// break startup) and reports which expected strings were NOT found.
+let _ocrWorkerPromise = null;
+async function getOcr() {
+  if (!_ocrWorkerPromise) {
+    _ocrWorkerPromise = (async () => {
+      const { createWorker } = require('tesseract.js');
+      return await createWorker('eng', 1, { cachePath: '/tmp/tessdata' });
+    })();
+  }
+  return _ocrWorkerPromise;
+}
+app.post('/verify-text', async (req, res) => {
+  try {
+    const { base64, expected = [] } = req.body || {};
+    if (!base64) return res.status(400).json({ ok: false, error: 'base64 image required' });
+    const worker = await getOcr();
+    const { data } = await worker.recognize(Buffer.from(base64, 'base64'));
+    const norm = (s) => String(s).toUpperCase().replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const haystack = norm(data.text);
+    const results = expected.map((e) => ({ expected: e, found: haystack.includes(norm(e)) }));
+    const missing = results.filter((r) => !r.found).map((r) => r.expected);
+    res.json({ ok: missing.length === 0, missing, results, ocrConfidence: data.confidence, ocrText: data.text.slice(0, 2000) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'OCR unavailable: ' + e.message });
+  }
 });
 
 // ── CREATE step ──────────────────────────────────────────────────────────────

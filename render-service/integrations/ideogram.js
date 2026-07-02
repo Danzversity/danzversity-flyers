@@ -73,6 +73,9 @@ async function generate({ prompt, negativePrompt, aspectRatio = '4x5', numImages
   }
   if (!candidates.length) throw new Error('Ideogram returned no usable images');
 
+  // Spend telemetry — Ideogram bills per generated image, whether we keep it or not.
+  require('./telemetry').reportSpend('ideogram', (json.data || []).length || numImages);
+
   return { candidates, styleRefsUsed: refs.map((r) => r.name), styleRefsMissing: missing };
 }
 

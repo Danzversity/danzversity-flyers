@@ -43,8 +43,11 @@ const CAMP_WEEKS = {
   '1': 'WEEK 1 • JUNE 15-19',
   '2': 'WEEK 2 • JUNE 22-26',
   '3': 'WEEK 3 • JUNE 29 - JULY 3',
-  '4': 'WEEK 4 • JULY 28 - AUGUST 1',
-  '5': 'WEEK 5 • AUGUST 4-8',
+  // Weeks 4-5 corrected 2026-07-01 to match the collective events sheet
+  // (Mon-Fri): Week 4 = Jul 27-31, Week 5 = Aug 3-7. The old values were
+  // Tue-Sat ranges that matched no real camp week.
+  '4': 'WEEK 4 • JULY 27-31',
+  '5': 'WEEK 5 • AUGUST 3-7',
 };
 
 // ── Field helpers ────────────────────────────────────────────────────────────
