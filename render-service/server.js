@@ -58,7 +58,7 @@ const social = require('./integrations/social');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.1.0'; // 1.1.0: social rail bridge + /pub tokens + OCR text gate + spend telemetry + camp weeks 4/5 date fix
+const VERSION = '1.2.0'; // 1.2.0: style packs (fonts/accents/looks) + /compose-variants + /generate-backgrounds
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
