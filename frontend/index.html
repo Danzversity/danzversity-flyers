@@ -47,9 +47,27 @@
         <span class="muted" id="modeHint"></span>
       </div>
 
+      <div class="moderow stylerow">
+        <span class="mode-label">Style</span>
+        <div class="seg" id="fontToggle"></div>
+        <div class="swatches" id="accentSwatches"></div>
+        <div class="seg" id="headlineToggle">
+          <button class="seg-btn active" type="button" data-headline="accent">Color headline</button>
+          <button class="seg-btn" type="button" data-headline="white">White headline</button>
+        </div>
+      </div>
+
+      <div class="moderow looksrow">
+        <span class="mode-label">Looks</span>
+        <button id="saveLookBtn" class="ghost sm" type="button">★ Save look</button>
+        <div id="lookChips" class="chips"></div>
+      </div>
+
       <div class="picker-block" id="bgBlock">
         <div class="picker-head">
           <span>Background <span class="muted" id="bgSource"></span></span>
+          <select id="bgVibe" class="sm-select"></select>
+          <button id="genBgBtn" class="ghost sm" type="button">✨ Generate new</button>
           <button id="uploadBgBtn" class="ghost sm" type="button">⬆ Upload</button>
           <label class="savechk"><input type="checkbox" id="saveBg" /> save to library</label>
           <input id="bgInput" type="file" accept="image/*" hidden />
@@ -73,8 +91,10 @@
 
       <div class="create-actions">
         <button id="composeBtn" class="primary big">Create flyer →</button>
+        <button id="variantsBtn" class="ghost" type="button" title="Render 3 quick previews with different fonts, colors and backgrounds">🎲 Show me 3 looks</button>
         <span id="composeHint" class="muted"></span>
       </div>
+      <div id="variants" class="variants hidden"></div>
       <div id="adcopy" class="adcopy hidden"></div>
     </section>
 

@@ -25,8 +25,10 @@ function entry(sizeKey, buffer, channel, family, slug, native) {
 }
 
 /**
- * @param {object} o {templateKey, content, background:Buffer, person:Buffer|null, slug?}
- * @returns {Promise<{templateKey,family,channel,slug,layout,spec,images:[]}>}
+ * @param {object} o {templateKey, content, background:Buffer, person:Buffer|null, slug?,
+ *                    style?: {font,accent,headline}, masterOnly?: boolean}
+ * masterOnly renders just the 4:5 master — used by /compose-variants for fast previews.
+ * @returns {Promise<{templateKey,family,channel,slug,layout,style,spec,images:[]}>}
  */
 async function composeFlyer(o) {
   const tpl = templates.byKey[o.templateKey];
@@ -35,10 +37,11 @@ async function composeFlyer(o) {
 
   const spec = templates.buildChassis(o.templateKey, o.content || {});
   if (!spec) throw new Error(`No chassis for template: ${o.templateKey}`);
+  spec.style = brand.sanitizeStyle(o.style);
 
   const family = tpl.family;                       // 'A' | 'A-Lite' | 'B'
   const channel = family === 'A-Lite' ? 'paid' : 'organic';
-  const sizeKeys = brand.FAMILY_SIZES[family] || brand.ORGANIC_SIZES;
+  const sizeKeys = o.masterOnly ? ['4x5'] : (brand.FAMILY_SIZES[family] || brand.ORGANIC_SIZES);
   const slug = slugify(o.slug || (o.content && o.content.title) || tpl.label);
   const person = spec.layout === 'testimonial' ? null : (o.person || null);
   // Grant-compliance flyers (e.g. (You)nity) carry the AACME logo — fetched once.
@@ -66,7 +69,7 @@ async function composeFlyer(o) {
   }
 
   out.sort((a, b) => sizeKeys.indexOf(a.sizeKey) - sizeKeys.indexOf(b.sizeKey));
-  return { templateKey: o.templateKey, family, channel, slug, layout: spec.layout, spec, images: out };
+  return { templateKey: o.templateKey, family, channel, slug, layout: spec.layout, style: spec.style, spec, images: out };
 }
 
 module.exports = { composeFlyer, NATIVE };

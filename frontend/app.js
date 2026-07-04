@@ -11,7 +11,13 @@ const FAMILIES = [
 ];
 
 const state = { files: { 'A': null, 'A-Lite': null, 'B': null }, images: [], template: '', month: '', slug: '', driveConfigured: false, activeTab: 'organic' };
-const create = { templates: [], backgrounds: [], people: [], selectedBg: null, bgFile: null, selectedPersonId: null, photoFile: null, mode: 'photo' };
+const create = {
+  templates: [], backgrounds: [], people: [], selectedBg: null, bgFile: null, selectedPersonId: null, photoFile: null, mode: 'photo',
+  style: { font: 'classic', accent: 'gold', headline: 'accent' },
+  styleOptions: null, bgVibes: [],
+  aiBgs: [], selectedAiIdx: null, // session-only Ideogram background candidates
+};
+const LOOKS_KEY = 'dvzFlyerLooks';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -47,8 +53,14 @@ function setDriveBadge(configured, errored) {
 
 // ── ① COMPOSE ──────────────────────────────────────────────────────────────────
 async function initCreate() {
-  try { const j = await (await fetch(`${API}/templates`)).json(); create.templates = j.templates || []; }
+  let j;
+  try { j = await (await fetch(`${API}/templates`)).json(); create.templates = j.templates || []; }
   catch (e) { return; }
+  create.styleOptions = j.styles || null;
+  create.bgVibes = j.bgVibes || [];
+  buildStyleRow();
+  buildVibeSelect();
+  renderLookChips();
   const sel = $('tplSelect');
   const groups = {}; create.templates.forEach((t) => { (groups[t.group] = groups[t.group] || []).push(t); });
   sel.innerHTML = '';
@@ -65,9 +77,62 @@ async function initCreate() {
   $('addPhotoBtn').addEventListener('click', () => $('photoInput').click());
   $('photoInput').addEventListener('change', onPickPhoto);
   document.querySelectorAll('#modeToggle .seg-btn').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  document.querySelectorAll('#headlineToggle .seg-btn').forEach((b) => b.addEventListener('click', () => setStyle({ headline: b.dataset.headline })));
+  $('variantsBtn').addEventListener('click', onVariants);
+  $('genBgBtn').addEventListener('click', onGenBgs);
+  $('saveLookBtn').addEventListener('click', onSaveLook);
   setMode('scene');
   onTemplateChange();
   loadLibraries();
+}
+
+// ── Style packs (fonts / accents / headline) ─────────────────────────────────
+function buildStyleRow() {
+  if (!create.styleOptions) return;
+  const ft = $('fontToggle'); ft.innerHTML = '';
+  create.styleOptions.fonts.forEach((f) => {
+    const b = el('button', 'seg-btn' + (create.style.font === f.key ? ' active' : ''), f.label);
+    b.type = 'button'; b.dataset.font = f.key;
+    b.addEventListener('click', () => setStyle({ font: f.key }));
+    ft.appendChild(b);
+  });
+  const sw = $('accentSwatches'); sw.innerHTML = '';
+  create.styleOptions.accents.forEach((a) => {
+    const b = el('button', 'swatch' + (create.style.accent === a.key ? ' sel' : ''));
+    b.type = 'button'; b.title = a.label; b.dataset.accent = a.key; b.style.background = a.hex;
+    b.addEventListener('click', () => setStyle({ accent: a.key }));
+    sw.appendChild(b);
+  });
+}
+function setStyle(patch) {
+  Object.assign(create.style, patch);
+  document.querySelectorAll('#fontToggle .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.font === create.style.font));
+  document.querySelectorAll('#accentSwatches .swatch').forEach((b) => b.classList.toggle('sel', b.dataset.accent === create.style.accent));
+  document.querySelectorAll('#headlineToggle .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.headline === create.style.headline));
+}
+
+// ── Saved looks (localStorage) ────────────────────────────────────────────────
+function getLooks() { try { return JSON.parse(localStorage.getItem(LOOKS_KEY)) || []; } catch (_) { return []; } }
+function setLooks(looks) { localStorage.setItem(LOOKS_KEY, JSON.stringify(looks)); renderLookChips(); }
+function onSaveLook() {
+  const name = window.prompt('Name this look:', ''); if (!name || !name.trim()) return;
+  const looks = getLooks().filter((l) => l.name !== name.trim());
+  looks.push({ name: name.trim(), style: { ...create.style }, mode: create.mode });
+  setLooks(looks);
+  toast(`Look “${name.trim()}” saved.`, 'ok');
+}
+function renderLookChips() {
+  const host = $('lookChips'); host.innerHTML = '';
+  getLooks().forEach((l) => {
+    const chip = el('span', 'chip');
+    const apply = el('button', 'chip-name', l.name); apply.type = 'button';
+    apply.title = 'Apply this look';
+    apply.addEventListener('click', () => { setStyle({ ...l.style }); if (l.mode) setMode(l.mode); toast(`Look “${l.name}” applied.`, 'ok'); });
+    const del = el('button', 'chip-x', '×'); del.type = 'button'; del.title = 'Delete look';
+    del.addEventListener('click', () => setLooks(getLooks().filter((x) => x.name !== l.name)));
+    chip.appendChild(apply); chip.appendChild(del); host.appendChild(chip);
+  });
+  $('lookChips').classList.toggle('hidden', !getLooks().length);
 }
 
 function currentTemplate() { return create.templates.find((t) => t.key === $('tplSelect').value); }
@@ -118,21 +183,54 @@ function thumb(kind, id) { return `${API}/thumb?kind=${kind}&id=${encodeURICompo
 
 function renderBgPicker() {
   const host = $('bgPicker'); host.innerHTML = '';
-  if (!create.backgrounds.length) host.innerHTML = '<span class="muted">No saved backgrounds — upload one above, or add to the Drive library.</span>';
+  if (!create.backgrounds.length && !create.aiBgs.length) host.innerHTML = '<span class="muted">No saved backgrounds — generate one with ✨, upload, or add to the Drive library.</span>';
+  // Fresh AI candidates first (session-only until used with "save to library").
+  create.aiBgs.forEach((c, i) => {
+    const d = el('div', 'thumb-item ai' + (create.selectedAiIdx === i ? ' sel' : '')); d.title = 'AI background (new)';
+    d.innerHTML = `<img src="data:image/png;base64,${c.base64}" alt="" loading="lazy"><span class="ai-tag">✨ new</span>`;
+    d.addEventListener('click', () => {
+      create.selectedAiIdx = i; create.selectedBg = null;
+      create.bgFile = b64ToFile(c.base64, `ai-bg-${Date.now()}.png`); // rides the normal upload path
+      $('bgChosen').textContent = 'Using new AI background' + ($('saveBg').checked ? ' (will save to library)' : '');
+      renderBgPicker();
+    });
+    host.appendChild(d);
+  });
   create.backgrounds.forEach((b) => {
     const d = el('div', 'thumb-item' + (create.selectedBg === b.id && !create.bgFile ? ' sel' : '')); d.title = b.name;
     d.innerHTML = `<img src="${thumb('backgrounds', b.id)}" alt="" loading="lazy">`;
-    d.addEventListener('click', () => { create.selectedBg = b.id; create.bgFile = null; $('bgChosen').textContent = ''; renderBgPicker(); });
+    d.addEventListener('click', () => { create.selectedBg = b.id; create.bgFile = null; create.selectedAiIdx = null; $('bgChosen').textContent = ''; renderBgPicker(); });
     host.appendChild(d);
   });
 }
 
 function onUploadBg() {
   const f = $('bgInput').files[0]; if (!f) return;
-  create.bgFile = f; create.selectedBg = null;
+  create.bgFile = f; create.selectedBg = null; create.selectedAiIdx = null;
   $('bgChosen').textContent = 'Using upload: ' + f.name + ($('saveBg').checked ? ' (will save to library)' : '');
   renderBgPicker();
 }
+
+// ── AI backgrounds (Ideogram, per vibe) ──────────────────────────────────────
+function buildVibeSelect() {
+  const sel = $('bgVibe'); sel.innerHTML = '';
+  create.bgVibes.forEach((v) => { const o = document.createElement('option'); o.value = v.key; o.textContent = v.label; sel.appendChild(o); });
+  const hasVibes = create.bgVibes.length > 0;
+  sel.classList.toggle('hidden', !hasVibes); $('genBgBtn').classList.toggle('hidden', !hasVibes);
+}
+async function onGenBgs() {
+  const btn = $('genBgBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin dark"></span>Generating…';
+  try {
+    const r = await (await fetch(`${API}/generate-backgrounds`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vibe: $('bgVibe').value, count: 4 }) })).json();
+    if (!r.ok) throw new Error(r.error || 'generation failed');
+    create.aiBgs = r.candidates || []; create.selectedAiIdx = null;
+    renderBgPicker();
+    toast(`${create.aiBgs.length} new backgrounds — click one to use it.`, 'ok');
+  } catch (e) { toast('Background generation failed: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = '✨ Generate new'; }
+}
+function b64ToFile(b64, name) { return new File([b64ToBlob(b64)], name, { type: 'image/png' }); }
 
 function setMode(m) {
   create.mode = ['scene', 'cutout', 'photo'].includes(m) ? m : 'scene';
@@ -174,15 +272,17 @@ function onPickPhoto() {
 
 // (direct background upload handled by onUploadBg; saved to library on compose if "save" is checked)
 
-async function onCompose() {
-  const t = currentTemplate(); if (!t) return;
+// Validate the Build panel and assemble the multipart body shared by
+// /compose and /compose-variants. Returns null (after a toast) when invalid.
+function buildComposeFd() {
+  const t = currentTemplate(); if (!t) return null;
   const content = collectContent();
   const missing = t.fields.filter((fld) => fld.required && !content[fld.name]);
-  if (missing.length) return toast('Fill required: ' + missing.map((m) => m.label).join(', '), 'err');
+  if (missing.length) { toast('Fill required: ' + missing.map((m) => m.label).join(', '), 'err'); return null; }
   if (create.mode === 'photo') {
-    if (!create.photoFile && !create.selectedPersonId) return toast('Full-bleed: upload or pick a photo.', 'err');
+    if (!create.photoFile && !create.selectedPersonId) { toast('Full-bleed: upload or pick a photo.', 'err'); return null; }
   } else if (!create.selectedBg && !create.bgFile) {
-    return toast('Pick or upload a background.', 'err');
+    toast('Pick or upload a background.', 'err'); return null;
   }
 
   if (!$('qrToggle').checked) content.qr = false;
@@ -190,10 +290,18 @@ async function onCompose() {
   fd.append('templateKey', t.key);
   fd.append('content', JSON.stringify(content));
   fd.append('mode', create.mode);
+  fd.append('style', JSON.stringify(create.style));
   if (create.bgFile) { fd.append('background', create.bgFile); if ($('saveBg').checked) fd.append('saveBg', 'true'); }
   else if (create.selectedBg) fd.append('backgroundId', create.selectedBg);
   if (create.photoFile) { fd.append('photo', create.photoFile); if ($('savePhoto').checked) fd.append('savePhoto', 'true'); }
   else if (create.selectedPersonId) fd.append('personId', create.selectedPersonId);
+  return { t, content, fd };
+}
+
+async function onCompose() {
+  const built = buildComposeFd(); if (!built) return;
+  const { t, fd } = built;
+  $('variants').classList.add('hidden');
 
   const btn = $('composeBtn'); const orig = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Composing…';
   try {
@@ -206,6 +314,34 @@ async function onCompose() {
     $('resultsPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) { toast('Error: ' + e.message, 'err'); }
   finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+// ── 3 looks — fast style/background variants, pick one, full compose ─────────
+async function onVariants() {
+  const built = buildComposeFd(); if (!built) return;
+  const btn = $('variantsBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin dark"></span>Rendering looks…';
+  try {
+    const data = await (await fetch(`${API}/compose-variants`, { method: 'POST', body: built.fd })).json();
+    if (!data.ok) throw new Error(data.error || 'variants failed');
+    renderVariants(data.variants || []);
+    toast(`${data.count} looks in ${data.renderMs} ms — pick one.`, 'ok');
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = '🎲 Show me 3 looks'; }
+}
+function renderVariants(variants) {
+  const host = $('variants'); host.innerHTML = ''; host.classList.remove('hidden');
+  variants.forEach((v) => {
+    const card = el('div', 'variant');
+    card.innerHTML = `<div class="variant-thumb"><img src="data:image/png;base64,${v.base64}" alt=""></div><div class="variant-label">${v.label}</div>`;
+    const use = el('button', 'primary', 'Use this look'); use.type = 'button';
+    use.addEventListener('click', () => {
+      setStyle({ ...v.style });
+      if (v.backgroundId && v.backgroundId !== create.selectedBg) { create.selectedBg = v.backgroundId; create.bgFile = null; create.selectedAiIdx = null; renderBgPicker(); }
+      host.classList.add('hidden');
+      onCompose();
+    });
+    card.appendChild(use); host.appendChild(card);
+  });
 }
 
 // ── ② SIZE & SHIP (manual master upload) ───────────────────────────────────────

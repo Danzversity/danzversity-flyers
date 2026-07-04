@@ -20,21 +20,34 @@ const FONT_PATH = path.join(__dirname, '..', '..', 'fonts', 'BebasNeue-Regular.t
 const LOGO_PATH = path.join(__dirname, '..', '..', 'assets', 'refs', 'logo.png');
 const G = brand.palette.gold, WHT = brand.palette.textPrimary, BLK = brand.palette.black;
 
-let _fontB64 = null;
-function fontB64() { if (_fontB64 == null) _fontB64 = fs.readFileSync(FONT_PATH).toString('base64'); return _fontB64; }
+// Font cache — any TTF in fonts/ by filename (Bebas + Inter always; a style
+// pack's display font is embedded additionally when selected).
+const FONTS_DIR = path.join(__dirname, '..', '..', 'fonts');
+const _b64 = {};
+function ttfB64(file) { if (!_b64[file]) _b64[file] = fs.readFileSync(path.join(FONTS_DIR, file)).toString('base64'); return _b64[file]; }
+function fontB64() { return ttfB64('BebasNeue-Regular.ttf'); }
 // Inter (subset, Medium) — the brand body font. Bebas is display-only; Inter
 // carries all the supporting text so flyers don't read as one mono display font.
-const INTER_PATH = path.join(__dirname, '..', '..', 'fonts', 'Inter-Body.ttf');
-let _interB64 = null;
-function interB64() { if (_interB64 == null) _interB64 = fs.readFileSync(INTER_PATH).toString('base64'); return _interB64; }
+function interB64() { return ttfB64('Inter-Body.ttf'); }
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
-function defs(topH, botStart) {
+// Resolve a spec's style pack → {font:{...def}, accent:hex, headlineFill(A,WHT)}.
+function resolveStyle(spec) {
+  const st = brand.sanitizeStyle(spec.style);
+  const font = brand.displayFonts[st.font];
+  const accent = brand.styleAccents[st.accent].hex;
+  return { font, accent, white: st.headline === 'white', key: st };
+}
+
+function defs(topH, botStart, dfont) {
+  const extra = dfont && dfont.family !== 'Bebas Neue'
+    ? `@font-face{font-family:'${dfont.family}';src:url(data:font/ttf;base64,${ttfB64(dfont.file)}) format('truetype');}`
+    : '';
   return `<defs>
     <linearGradient id="ts" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0.9"/><stop offset="0.6" stop-color="#000" stop-opacity="0.4"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
     <linearGradient id="bs" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0.97"/><stop offset="0.5" stop-color="#000" stop-opacity="0.82"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
     <linearGradient id="ps" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.55" stop-color="#000" stop-opacity="0.35"/><stop offset="1" stop-color="#000" stop-opacity="0.62"/></linearGradient>
-    <style>@font-face{font-family:'Bebas Neue';src:url(data:font/ttf;base64,${fontB64()}) format('truetype');}@font-face{font-family:'Inter';src:url(data:font/ttf;base64,${interB64()}) format('truetype');}text{font-family:'Bebas Neue',sans-serif;}</style>
+    <style>@font-face{font-family:'Bebas Neue';src:url(data:font/ttf;base64,${fontB64()}) format('truetype');}@font-face{font-family:'Inter';src:url(data:font/ttf;base64,${interB64()}) format('truetype');}${extra}text{font-family:'Bebas Neue',sans-serif;}</style>
   </defs>
   <rect x="0" y="0" width="100%" height="${topH}" fill="url(#ts)"/>
   <rect x="0" y="${botStart}" width="100%" height="${100}%" fill="url(#bs)"/>`;
@@ -51,31 +64,38 @@ function wrapWords(s, maxChars) {
 // ── Style A (standard) — also drives Style B via opts ────────────────────────
 function svgStyleA(W, H, spec, opts = {}) {
   const cx = W / 2, F = (f) => Math.round(H * f);
+  const style = resolveStyle(spec);
+  const A = style.accent; // accent layer color (gold in the classic pack)
   const topH = F(opts.scrimTop || 0.34), botStart = F(0.55);
   // Text helper — Bebas (the brand display font; set as the <style> default).
   // o.maxW shrinks the font size if a line would overflow so long content never
   // hits the edge; short content renders at its natural size (the proven scale).
+  // o.font/o.wf switch the family + width estimate (style-pack headline only) —
+  // as an inline style, because the <style> block's text{} rule beats a
+  // font-family presentation attribute.
   const t = (s, y, size, fill, o = {}) => {
     const ls = o.ls || 1;
     let sz = size;
-    if (o.maxW) { const est = String(s).length * (sz * 0.56 + ls); if (est > o.maxW) sz = Math.floor(sz * o.maxW / est); }
-    return `<text x="${o.x || cx}" y="${y}" font-size="${sz}" fill="${fill}" text-anchor="middle" letter-spacing="${ls}">${esc(s)}</text>`;
+    if (o.maxW) { const est = String(s).length * (sz * (o.wf || 0.56) + ls); if (est > o.maxW) sz = Math.floor(sz * o.maxW / est); }
+    return `<text x="${o.x || cx}" y="${y}" font-size="${sz}" fill="${fill}" text-anchor="middle" letter-spacing="${ls}"${o.font ? ` style="font-family:'${esc(o.font)}'"` : ''}>${esc(s)}</text>`;
   };
-  const L = [`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`, defs(topH, botStart)];
+  const hFont = style.font.family !== 'Bebas Neue'
+    ? { font: style.font.family, wf: style.font.widthFactor } : {};
+  const L = [`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`, defs(topH, botStart, style.font)];
 
   // Extra scrim panel concentrated behind the lower info block.
   L.push(`<rect x="0" y="${F(0.60)}" width="100%" height="${F(0.40)}" fill="url(#ps)"/>`);
 
   // Top block (logo is composited separately, above this).
-  const hSize = F(opts.headlineSize || 0.062);
+  const hSize = Math.round(F(opts.headlineSize || 0.062) * style.font.scale);
   // topShift drops the whole title block (kicker → subhead) for more air under the
   // logo. Layout B passes it; layout A (Camp) passes none, so its blessed spacing holds.
   const ts = F(opts.topShift || 0);
   // Kicker — eyebrow line above the headline (proof / tenure / credibility).
-  if (spec.kicker) L.push(t(spec.kicker, F(0.205) + ts, F(0.023), G, { ls: 3, maxW: W * 0.9 }));
+  if (spec.kicker) L.push(t(spec.kicker, F(0.205) + ts, F(0.023), A, { ls: 3, maxW: W * 0.9 }));
   if (spec.headline) {
-    L.push(t(spec.headline, F(0.262) + ts, hSize, G, { maxW: W * 0.9 }));
-    if (opts.headlineBar) L.push(`<rect x="${cx - F(0.14)}" y="${F(0.275) + ts}" width="${F(0.28)}" height="${Math.max(3, F(0.006))}" fill="${G}"/>`);
+    L.push(t(spec.headline, F(0.262) + ts, hSize, style.white ? WHT : A, { maxW: W * 0.9, ...hFont }));
+    if (opts.headlineBar) L.push(`<rect x="${cx - F(0.14)}" y="${F(0.275) + ts}" width="${F(0.28)}" height="${Math.max(3, F(0.006))}" fill="${A}"/>`);
   }
   if (spec.subhead) L.push(t(spec.subhead, F(opts.headlineBar ? 0.318 : 0.306) + ts, F(0.032), WHT, { maxW: W * 0.88 }));
 
@@ -93,23 +113,23 @@ function svgStyleA(W, H, spec, opts = {}) {
   let y = F(hasCompliance ? 0.83 : 0.912);
   if (spec.cta) {
     const pw = F(0.32), ph = F(0.050), px = cx - pw / 2, py = y - ph;
-    L.push(`<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${ph / 2}" fill="${G}"/>`);
+    L.push(`<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${ph / 2}" fill="${A}"/>`);
     L.push(t(spec.cta, py + ph * 0.70, F(0.030), BLK, { maxW: pw * 0.9 }));
     y = py - F(0.024);
   }
-  // Urgency strip — gold-outlined badge just above the CTA (scarcity / deadline).
+  // Urgency strip — accent-outlined badge just above the CTA (scarcity / deadline).
   if (spec.urgency) {
     const uh = F(0.042);
     const uw = Math.min(F(0.80), Math.max(F(0.34), spec.urgency.length * F(0.0142) + F(0.06)));
     const uy = y - uh;
-    L.push(`<rect x="${cx - uw / 2}" y="${uy}" width="${uw}" height="${uh}" rx="${uh / 2}" fill="#000000" fill-opacity="0.35" stroke="${G}" stroke-width="${Math.max(2, F(0.0032))}"/>`);
-    L.push(t(spec.urgency, uy + uh * 0.66, F(0.0235), G, { ls: 1.5 }));
+    L.push(`<rect x="${cx - uw / 2}" y="${uy}" width="${uw}" height="${uh}" rx="${uh / 2}" fill="#000000" fill-opacity="0.35" stroke="${A}" stroke-width="${Math.max(2, F(0.0032))}"/>`);
+    L.push(t(spec.urgency, uy + uh * 0.66, F(0.0235), A, { ls: 1.5 }));
     y = uy - F(0.024);
   }
-  if (spec.price) { L.push(t(spec.price, y, F(0.035), G, { maxW: W * 0.88 })); y -= F(0.046); }
+  if (spec.price) { L.push(t(spec.price, y, F(0.035), A, { maxW: W * 0.88 })); y -= F(0.046); }
   const info = (spec.infoLines || []).filter(Boolean).slice().reverse();
   for (const line of info) { L.push(t(line, y, F(0.028), WHT, { maxW: W * 0.9 })); y -= F(0.035); }
-  if (info.length || spec.price) { L.push(`<rect x="${cx - F(0.10)}" y="${y}" width="${F(0.20)}" height="${Math.max(2, F(0.004))}" fill="${G}"/>`); y -= F(0.030); }
+  if (info.length || spec.price) { L.push(`<rect x="${cx - F(0.10)}" y="${y}" width="${F(0.20)}" height="${Math.max(2, F(0.004))}" fill="${A}"/>`); y -= F(0.030); }
   if (spec.tagline) L.push(t(spec.tagline, y, F(0.030), WHT, { maxW: W * 0.9 }));
 
   L.push('</svg>');
@@ -119,13 +139,16 @@ function svgStyleA(W, H, spec, opts = {}) {
 // ── Style A-Lite (paid, photo-dominant, minimal) ─────────────────────────────
 function svgALite(W, H, spec) {
   const cx = W / 2, F = (f) => Math.round(H * f);
-  const t = (s, y, size, fill, o = {}) => `<text x="${cx}" y="${y}" font-size="${size}" fill="${fill}" text-anchor="middle" letter-spacing="${o.ls || 1}">${esc(s)}</text>`;
-  const L = [`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`, defs(F(0.20), F(0.72))];
-  if (spec.headline) L.push(t(spec.headline, F(0.855), F(0.058), G));
+  const style = resolveStyle(spec);
+  const A = style.accent;
+  const t = (s, y, size, fill, o = {}) => `<text x="${cx}" y="${y}" font-size="${size}" fill="${fill}" text-anchor="middle" letter-spacing="${o.ls || 1}"${o.font ? ` style="font-family:'${esc(o.font)}'"` : ''}>${esc(s)}</text>`;
+  const hFont = style.font.family !== 'Bebas Neue' ? { font: style.font.family } : {};
+  const L = [`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`, defs(F(0.20), F(0.72), style.font)];
+  if (spec.headline) L.push(t(spec.headline, F(0.855), Math.round(F(0.058) * style.font.scale), style.white ? WHT : A, hFont));
   if (spec.subhead) L.push(t(spec.subhead, F(0.900), F(0.028), WHT));
   if (spec.url) L.push(t(`${spec.url}  ·  ${spec.address || ''}`.trim().replace(/·\s*$/, ''), F(0.950), F(0.020), WHT, { ls: 1.5 }));
-  // thin gold accent bar at very bottom — single brand touch for paid
-  L.push(`<rect x="0" y="${H - Math.max(4, F(0.008))}" width="100%" height="${Math.max(4, F(0.008))}" fill="${G}"/>`);
+  // thin accent bar at very bottom — single brand touch for paid
+  L.push(`<rect x="0" y="${H - Math.max(4, F(0.008))}" width="100%" height="${Math.max(4, F(0.008))}" fill="${A}"/>`);
   L.push('</svg>');
   return L.join('');
 }
@@ -133,18 +156,22 @@ function svgALite(W, H, spec) {
 // ── Testimonial (quote-centric) ──────────────────────────────────────────────
 function svgTestimonial(W, H, spec) {
   const cx = W / 2, F = (f) => Math.round(H * f);
-  const t = (s, y, size, fill, o = {}) => `<text x="${cx}" y="${y}" font-size="${size}" fill="${fill}" text-anchor="middle" letter-spacing="${o.ls || 1}">${esc(s)}</text>`;
-  const L = [`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`, defs(F(0.30), F(0.55))];
-  // gold corner frame
+  const style = resolveStyle(spec);
+  const A = style.accent;
+  const t = (s, y, size, fill, o = {}) => `<text x="${cx}" y="${y}" font-size="${size}" fill="${fill}" text-anchor="middle" letter-spacing="${o.ls || 1}"${o.font ? ` style="font-family:'${esc(o.font)}'"` : ''}>${esc(s)}</text>`;
+  const hFont = style.font.family !== 'Bebas Neue' ? { font: style.font.family } : {};
+  const L = [`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`, defs(F(0.30), F(0.55), style.font)];
+  // accent corner frame
   const m = F(0.04), bar = Math.max(3, F(0.005));
-  L.push(`<rect x="${m}" y="${m}" width="${W - 2 * m}" height="${bar}" fill="${G}"/><rect x="${m}" y="${H - m - bar}" width="${W - 2 * m}" height="${bar}" fill="${G}"/>`);
-  // quote (wrapped), centered vertically-ish
-  const lines = wrapWords(`“${spec.quote || ''}”`, 20);
-  const qSize = F(0.058), lineH = F(0.072);
+  L.push(`<rect x="${m}" y="${m}" width="${W - 2 * m}" height="${bar}" fill="${A}"/><rect x="${m}" y="${H - m - bar}" width="${W - 2 * m}" height="${bar}" fill="${A}"/>`);
+  // quote (wrapped), centered vertically-ish — wrap width tracks the font's glyph
+  // width so wider display fonts get fewer chars per line instead of overflowing.
+  const lines = wrapWords(`“${spec.quote || ''}”`, Math.max(12, Math.round(20 * 0.56 / style.font.widthFactor)));
+  const qSize = Math.round(F(0.058) * style.font.scale), lineH = F(0.072);
   let y = H / 2 - ((lines.length - 1) * lineH) / 2 - F(0.04);
-  for (const ln of lines) { L.push(t(ln, y, qSize, WHT)); y += lineH; }
-  if (spec.keyword) L.push(t(spec.keyword.toUpperCase(), y + F(0.01), F(0.040), G));
-  if (spec.reviewer) L.push(t(`${spec.reviewer}  ★★★★★`, F(0.80), F(0.030), G));
+  for (const ln of lines) { L.push(t(ln, y, qSize, WHT, hFont)); y += lineH; }
+  if (spec.keyword) L.push(t(spec.keyword.toUpperCase(), y + F(0.01), F(0.040), A));
+  if (spec.reviewer) L.push(t(`${spec.reviewer}  ★★★★★`, F(0.80), F(0.030), A));
   if (spec.url) L.push(t(spec.url, F(0.910), F(0.022), WHT, { ls: 2 }));
   if (spec.address) L.push(t(spec.address, F(0.935), F(0.019), WHT, { ls: 1.5 }));
   L.push('</svg>');

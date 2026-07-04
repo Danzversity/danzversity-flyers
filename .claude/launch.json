@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "flyers",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["render-service/server.js"],
+      "port": 3001
+    }
+  ]
+}

@@ -214,7 +214,19 @@ app.post('/verify-text', async (req, res) => {
 // ── CREATE step ──────────────────────────────────────────────────────────────
 // List templates + their content fields.
 app.get('/templates', (req, res) => {
-  res.json({ ok: true, ideogramConfigured: ideogram.isConfigured(), templates: templates.listTemplates() });
+  res.json({
+    ok: true, ideogramConfigured: ideogram.isConfigured(), templates: templates.listTemplates(),
+    // Style packs + background vibes — the frontend builds its pickers from
+    // these so brand.js stays the single source of truth.
+    styles: {
+      fonts: Object.entries(brand.displayFonts).map(([key, f]) => ({ key, label: f.label })),
+      accents: Object.entries(brand.styleAccents).map(([key, a]) => ({ key, label: a.label, hex: a.hex })),
+    },
+    bgVibes: [
+      { key: 'grit', label: 'Grit' }, { key: 'neon', label: 'Neon' }, { key: 'studio', label: 'Studio' },
+      { key: 'graffiti', label: 'Graffiti' }, { key: 'gold', label: 'Gold streaks' },
+    ],
+  });
 });
 
 // Assemble the Ideogram prompt + ad copy from form content, and live-check the URL.
@@ -303,54 +315,65 @@ app.post('/upload-person', upload.single('file'), async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// Shared input gathering for /compose + /compose-variants: template content,
+// mode, photo (upload or library person) and background plate (upload or
+// library bg) → the compose inputs. Throws {status, message} on bad input.
+async function gatherComposeInputs(req) {
+  const templateKey = req.body.templateKey;
+  if (!templateKey) throw { status: 400, message: 'templateKey required' };
+
+  let content = {};
+  if (req.body.content) { try { content = JSON.parse(req.body.content); } catch (_) { throw { status: 400, message: 'content must be JSON' }; } }
+
+  let style = null;
+  if (req.body.style) { try { style = JSON.parse(req.body.style); } catch (_) { /* fall back to defaults */ } }
+
+  // mode: 'photo' = photo fills the frame (full-bleed); 'scene' = the WHOLE photo
+  // sits on a plate (band + feather, NO Remove.bg — best for group/action shots);
+  // 'cutout' = a single subject is lifted onto a plate (Remove.bg).
+  const mode = ['photo', 'scene', 'cutout'].includes(req.body.mode) ? req.body.mode : 'photo';
+
+  // Gather the photo (uploaded, optionally saved to library, OR a library person).
+  let photoBuf = null;
+  const photoUp = req.files && req.files.photo && req.files.photo[0];
+  if (photoUp) {
+    photoBuf = photoUp.buffer;
+    if (req.body.savePhoto === 'true') { try { await library.upload('people', photoUp.originalname || `photo-${Date.now()}.png`, photoUp.buffer, photoUp.mimetype || 'image/png'); } catch (_) { /* non-fatal */ } }
+  } else if (req.body.personId) {
+    photoBuf = await library.get('people', req.body.personId);
+  }
+
+  // Gather the background plate (uploaded, optionally saved, OR a library bg).
+  let plateBuf = null;
+  const bgUp = req.files && req.files.background && req.files.background[0];
+  if (bgUp) {
+    plateBuf = bgUp.buffer;
+    if (req.body.saveBg === 'true') { try { await library.upload('backgrounds', bgUp.originalname || `bg-${Date.now()}.png`, bgUp.buffer, bgUp.mimetype || 'image/png'); } catch (_) { /* non-fatal */ } }
+  } else if (req.body.backgroundId) {
+    plateBuf = await library.get('backgrounds', req.body.backgroundId);
+  }
+
+  let background, person = null;
+  if (mode === 'photo') {
+    if (!photoBuf) throw { status: 400, message: 'Full-bleed mode needs a photo.' };
+    background = photoBuf; // the photo IS the background — no rectangle, no second plate
+  } else {
+    if (!plateBuf) throw { status: 400, message: 'This mode needs a background plate.' };
+    background = plateBuf;
+    // 'cutout' lifts a single subject with Remove.bg; 'scene' keeps the whole photo
+    // (no API call — the chassis bands + feathers it onto the plate).
+    person = photoBuf ? (mode === 'cutout' ? await removebg.cutoutCached(photoBuf) : photoBuf) : null;
+  }
+  return { templateKey, content, style, mode, background, person, backgroundId: req.body.backgroundId || null };
+}
+const composeUpload = upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'background', maxCount: 1 }]);
+
 // Compose a flyer: library background + (uploaded or library) person + chassis → all sizes.
-app.post('/compose', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'background', maxCount: 1 }]), async (req, res) => {
+app.post('/compose', composeUpload, async (req, res) => {
   const t0 = Date.now();
   try {
-    const templateKey = req.body.templateKey;
-    if (!templateKey) return res.status(400).json({ ok: false, error: 'templateKey required' });
-
-    let content = {};
-    if (req.body.content) { try { content = JSON.parse(req.body.content); } catch (_) { return res.status(400).json({ ok: false, error: 'content must be JSON' }); } }
-
-    // mode: 'photo' = photo fills the frame (full-bleed); 'scene' = the WHOLE photo
-    // sits on a plate (band + feather, NO Remove.bg — best for group/action shots);
-    // 'cutout' = a single subject is lifted onto a plate (Remove.bg).
-    const mode = ['photo', 'scene', 'cutout'].includes(req.body.mode) ? req.body.mode : 'photo';
-
-    // Gather the photo (uploaded, optionally saved to library, OR a library person).
-    let photoBuf = null;
-    const photoUp = req.files && req.files.photo && req.files.photo[0];
-    if (photoUp) {
-      photoBuf = photoUp.buffer;
-      if (req.body.savePhoto === 'true') { try { await library.upload('people', photoUp.originalname || `photo-${Date.now()}.png`, photoUp.buffer, photoUp.mimetype || 'image/png'); } catch (_) { /* non-fatal */ } }
-    } else if (req.body.personId) {
-      photoBuf = await library.get('people', req.body.personId);
-    }
-
-    // Gather the background plate (uploaded, optionally saved, OR a library bg).
-    let plateBuf = null;
-    const bgUp = req.files && req.files.background && req.files.background[0];
-    if (bgUp) {
-      plateBuf = bgUp.buffer;
-      if (req.body.saveBg === 'true') { try { await library.upload('backgrounds', bgUp.originalname || `bg-${Date.now()}.png`, bgUp.buffer, bgUp.mimetype || 'image/png'); } catch (_) { /* non-fatal */ } }
-    } else if (req.body.backgroundId) {
-      plateBuf = await library.get('backgrounds', req.body.backgroundId);
-    }
-
-    let background, person = null;
-    if (mode === 'photo') {
-      if (!photoBuf) return res.status(400).json({ ok: false, error: 'Full-bleed mode needs a photo.' });
-      background = photoBuf; // the photo IS the background — no rectangle, no second plate
-    } else {
-      if (!plateBuf) return res.status(400).json({ ok: false, error: 'This mode needs a background plate.' });
-      background = plateBuf;
-      // 'cutout' lifts a single subject with Remove.bg; 'scene' keeps the whole photo
-      // (no API call — the chassis bands + feathers it onto the plate).
-      person = photoBuf ? (mode === 'cutout' ? await removebg.cutoutCached(photoBuf) : photoBuf) : null;
-    }
-
-    const result = await composeFlyer({ templateKey, content, background, person, slug: req.body.slug || content.title });
+    const { templateKey, content, style, mode, background, person } = await gatherComposeInputs(req);
+    const result = await composeFlyer({ templateKey, content, style, background, person, slug: req.body.slug || content.title });
     const images = result.images.map((i) => ({
       family: i.family, channel: i.channel, sizeKey: i.sizeKey, label: i.label,
       filename: i.filename, width: i.width, height: i.height, native: i.native, bytes: i.bytes,
@@ -362,11 +385,93 @@ app.post('/compose', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'bac
 
     res.json({
       ok: true, templateKey, mode, family: result.family, channel: result.channel, slug: result.slug, layout: result.layout,
-      month: content.month || '', driveConfigured: gdrive.isConfigured(), adCopy,
+      style: result.style, month: content.month || '', driveConfigured: gdrive.isConfigured(), adCopy,
       counts: { total: images.length }, renderMs: Date.now() - t0, images,
     });
   } catch (e) {
     console.error('/compose error:', e.stack || e.message);
+    res.status(e.status || 500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── COMPOSE VARIANTS — "3 looks" (July 4, 2026) ─────────────────────────────
+// Same inputs as /compose. Renders N fast 4:5-only master previews, each with
+// a distinct style-pack combo (variant 1 = the user's current selection) and,
+// when the library allows, a different background plate. The frontend then
+// runs a full /compose with the chosen look. Cutout mode costs ONE Remove.bg
+// call total (cutoutCached), not one per variant.
+app.post('/compose-variants', composeUpload, async (req, res) => {
+  const t0 = Date.now();
+  try {
+    const { templateKey, content, style, mode, background, person, backgroundId } = await gatherComposeInputs(req);
+    const n = Math.min(Math.max(parseInt(req.body.count, 10) || 3, 2), 4);
+
+    // Distinct style combos: user's pick first, then shuffled font×accent pairs.
+    const base = brand.sanitizeStyle(style);
+    const combos = [base];
+    const pool = [];
+    for (const f of Object.keys(brand.displayFonts)) for (const a of Object.keys(brand.styleAccents)) {
+      if (!(f === base.font && a === base.accent)) pool.push({ font: f, accent: a, headline: base.headline });
+    }
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    combos.push(...pool.slice(0, n - 1));
+
+    // Vary the plate too when composing from a library background with spares.
+    let plates = combos.map(() => ({ buf: background, id: backgroundId }));
+    if (mode !== 'photo' && backgroundId) {
+      try {
+        const others = (await library.list('backgrounds')).filter((b) => b.id !== backgroundId);
+        for (let i = 1; i < combos.length && others.length; i++) {
+          const pick = others.splice(Math.floor(Math.random() * others.length), 1)[0];
+          plates[i] = { buf: await library.get('backgrounds', pick.id), id: pick.id };
+        }
+      } catch (_) { /* variants still work on the same plate */ }
+    }
+
+    const variants = [];
+    for (let i = 0; i < combos.length; i++) {
+      const r = await composeFlyer({ templateKey, content, style: combos[i], background: plates[i].buf, person, masterOnly: true, slug: content.title });
+      variants.push({
+        index: i, style: r.style, backgroundId: plates[i].id,
+        label: `${brand.displayFonts[r.style.font].label} · ${brand.styleAccents[r.style.accent].label}`,
+        width: r.images[0].width, height: r.images[0].height,
+        base64: r.images[0].buffer.toString('base64'),
+      });
+    }
+    res.json({ ok: true, templateKey, mode, count: variants.length, renderMs: Date.now() - t0, variants });
+  } catch (e) {
+    console.error('/compose-variants error:', e.stack || e.message);
+    res.status(e.status || 500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── AI BACKGROUNDS — "more like this" (July 4, 2026) ────────────────────────
+// Generates brand-consistent background PLATES (no text, no people) via
+// Ideogram, per vibe. Returns base64 candidates; the frontend feeds a chosen
+// one through the normal upload path (so "save to library" keeps working and
+// unused candidates never pollute the library). Telemetry is automatic in the
+// ideogram client (per generated image).
+const BG_VIBES = {
+  grit:     'Moody dark urban dance studio interior, black concrete and brick textures, dramatic warm golden rim lighting, light haze, cinematic, empty open floor, centered negative space',
+  neon:     'Dark city alley at night with subtle warm neon glow and wet asphalt reflections, deep blacks with gold and amber highlights, cinematic haze, empty scene, centered negative space',
+  studio:   'Clean professional dance studio, dark charcoal walls, soft dramatic spotlight pool on an empty wooden floor, subtle warm gold tone, minimalist, centered negative space',
+  graffiti: 'Dark graffiti wall backdrop with abstract spray paint shapes and drips, muted colors on near-black wall, warm accent lighting from above, gritty street texture, empty foreground, centered negative space',
+  gold:     'Abstract dark background with flowing gold light streaks and particle sparks on pure black, elegant high-contrast motion energy, centered negative space',
+};
+const BG_NEGATIVE = 'text, words, letters, typography, logo, watermark, people, faces, hands, dancers, figures';
+app.post('/generate-backgrounds', async (req, res) => {
+  const t0 = Date.now();
+  try {
+    if (!ideogram.isConfigured()) return res.status(503).json({ ok: false, error: 'IDEOGRAM_API_KEY not set on the server.' });
+    const vibe = BG_VIBES[req.body && req.body.vibe] ? req.body.vibe : 'grit';
+    const n = Math.min(Math.max(parseInt(req.body && req.body.count, 10) || 4, 1), 4);
+    const out = await ideogram.generate({ prompt: BG_VIBES[vibe], negativePrompt: BG_NEGATIVE, aspectRatio: '4x5', numImages: n });
+    res.json({
+      ok: true, vibe, renderMs: Date.now() - t0,
+      candidates: out.candidates.map((c, i) => ({ index: i, base64: c.buffer.toString('base64') })),
+    });
+  } catch (e) {
+    console.error('/generate-backgrounds error:', e.stack || e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });

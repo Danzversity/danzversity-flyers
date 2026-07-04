@@ -61,6 +61,47 @@ const fonts = {
 };
 
 // ---------------------------------------------------------------------------
+// Style packs (July 4, 2026) — curated variety for the compose flow.
+// Presets, not sliders: every option is brand-approved, so the chassis stays
+// locked while the operator still gets real choice. Defaults reproduce the
+// classic v11 look byte-identically.
+//
+// displayFonts drive the HEADLINE ONLY (kicker/info/footer stay Bebas/Inter).
+//   widthFactor — average glyph width ÷ font-size, used by the overflow
+//                 shrink estimate (Bebas is condensed: 0.56; wider fonts more)
+//   scale       — base headline size multiplier so wide fonts don't shout
+// ---------------------------------------------------------------------------
+const displayFonts = {
+  classic: { label: 'Classic', file: 'BebasNeue-Regular.ttf',          family: 'Bebas Neue',           widthFactor: 0.56, scale: 1.00 },
+  marker:  { label: 'Marker',  file: 'PermanentMarker-Regular.ttf',    family: 'Permanent Marker',     widthFactor: 0.72, scale: 0.80 },
+  tag:     { label: 'Tag',     file: 'SedgwickAveDisplay-Regular.ttf', family: 'Sedgwick Ave Display', widthFactor: 0.70, scale: 0.84 },
+  block:   { label: 'Block',   file: 'Bungee-Regular.ttf',             family: 'Bungee',               widthFactor: 0.82, scale: 0.72 },
+};
+
+// Accent presets recolor the accent layer (kicker, urgency pill, CTA, bars,
+// price). All values are existing brand/program colors; red stays reserved.
+const styleAccents = {
+  gold:   { label: 'Gold',   hex: palette.gold },
+  orange: { label: 'Orange', hex: '#FF5722' }, // camps-orange
+  amber:  { label: 'Amber',  hex: '#FF9800' }, // trial-orange
+  blue:   { label: 'Blue',   hex: '#4472C4' }, // youth-blue
+  purple: { label: 'Purple', hex: '#9C27B0' }, // collective-purple
+};
+
+// headline: 'accent' = headline in the accent color (classic look when gold);
+//           'white'  = white headline, accents still carry the color.
+const headlineTreatments = ['accent', 'white'];
+
+function sanitizeStyle(s) {
+  const st = s && typeof s === 'object' ? s : {};
+  return {
+    font: displayFonts[st.font] ? st.font : 'classic',
+    accent: styleAccents[st.accent] ? st.accent : 'gold',
+    headline: headlineTreatments.includes(st.headline) ? st.headline : 'accent',
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Creative families (Flyer Design Standard v11, Standing Rule 4)
 //   channel    — where it runs (drives which size set + Drive bucket)
 //   cropPolicy — how downstream sizes are derived from the master:
@@ -186,6 +227,9 @@ module.exports = {
   palette,
   accents,
   fonts,
+  displayFonts,
+  styleAccents,
+  sanitizeStyle,
   LETTERBOX_FILL,
   families,
   sizes,
