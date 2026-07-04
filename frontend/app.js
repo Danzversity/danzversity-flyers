@@ -1,6 +1,6 @@
-// Danzversity Flyer Pipeline — frontend (vanilla JS, same-origin API).
-// ① Compose: template + info + library background + real photo + code chassis.
-// ② Size & ship: the composed master (or your own upload) → all sizes/bundles/Drive.
+// Danzversity Flyer Maker — frontend (vanilla JS, same-origin API).
+// ① Build: template + info + library background + real photo + code chassis → all sizes.
+// Advanced (collapsed): drop your own Ideogram masters → all sizes/bundles/Drive.
 
 const API = '';
 
@@ -29,6 +29,7 @@ function init() {
   $('dlMeta').addEventListener('click', () => downloadBundle('meta', ['4x5', '1x1', '9x16']));
   $('dlPmax').addEventListener('click', () => downloadBundle('pmax', ['4x5', '1x1', '9x16', '1.91x1']));
   $('saveDrive').addEventListener('click', onSaveDrive);
+  initPostDialog();
   checkHealth();
   initCreate();
 }
@@ -142,13 +143,13 @@ function setMode(m) {
   $('photoLabel').innerHTML = photoMode
     ? 'Photo <span class="muted">(fills the whole flyer)</span>'
     : (create.mode === 'cutout'
-        ? 'Photo of ONE subject <span class="muted">(lifted onto the plate)</span>'
-        : 'Photo / scene <span class="muted">(placed whole onto the plate)</span>');
+        ? 'Photo of ONE dancer <span class="muted">(lifted onto the background)</span>'
+        : 'Photo <span class="muted">(placed whole onto the background)</span>');
   $('modeHint').textContent = photoMode
-    ? 'Your photo becomes the whole flyer — no separate background needed.'
+    ? 'Your photo IS the flyer — no separate background needed.'
     : (create.mode === 'cutout'
-        ? 'Best for a SINGLE dancer — Remove.bg lifts them off their background onto the plate.'
-        : 'Best for group / action shots — the whole photo sits in a clean band on the plate. No AI cutout.');
+        ? 'Best for a single dancer — they get lifted off their photo onto the background.'
+        : 'Best for group / action shots — the whole photo sits in a clean band on the background.');
 }
 
 function renderPeoplePicker() {
@@ -181,7 +182,7 @@ async function onCompose() {
   if (create.mode === 'photo') {
     if (!create.photoFile && !create.selectedPersonId) return toast('Full-bleed: upload or pick a photo.', 'err');
   } else if (!create.selectedBg && !create.bgFile) {
-    return toast('Pick or upload a background plate.', 'err');
+    return toast('Pick or upload a background.', 'err');
   }
 
   if (!$('qrToggle').checked) content.qr = false;
@@ -286,34 +287,51 @@ function renderGrid() {
     node.querySelector('img').src = `data:image/png;base64,${img.base64}`;
     node.querySelector('.tile-label').textContent = `${img.label} · ${img.family}`;
     node.querySelector('.tile-dims').textContent = `${img.width}×${img.height}`;
-    node.querySelectorAll('.seg-btn').forEach((b) => { b.classList.toggle('active', b.dataset.policy === (img.native ? 'native' : img.policy)); b.style.display = img.native ? 'none' : ''; b.addEventListener('click', () => reDerive(idx, b.dataset.policy)); });
     node.querySelector('.dl-one').addEventListener('click', () => downloadOne(img));
-    node.querySelector('.post-one').addEventListener('click', () => postToSocial(img));
+    node.querySelector('.post-one').addEventListener('click', () => openPostDialog(img));
     grid.appendChild(node);
   });
 }
-async function reDerive(idx, policy) {
-  const img = state.images[idx]; if (!img || img.native) return; // native masters aren't re-derived
-  toast('Re-crop needs the master in the ② panel.', 'err');
-}
 
 // ── Social (danzversity-social rail: preview → confirm → send) ──────────────
-async function postToSocial(img) {
-  const caption = window.prompt('Caption for Facebook + Instagram:', '');
-  if (caption === null) return; // cancelled
-  const platforms = window.confirm('Post to BOTH Facebook and Instagram?\nOK = both · Cancel = Facebook only')
-    ? ['facebook', 'instagram'] : ['facebook'];
+// One dialog, two clicks: "Preview →" validates with the rail, then the same
+// button becomes "Post now" so nothing publishes on a single click.
+const post = { img: null, stage: 'compose' };
+function initPostDialog() {
+  $('postCancel').addEventListener('click', () => $('postDialog').close());
+  $('postSend').addEventListener('click', onPostSend);
+  // Any edit invalidates a passed preview — force a fresh one.
+  ['postCaption', 'pfFb', 'pfIg'].forEach((id) => $(id).addEventListener('input', () => setPostStage('compose')));
+}
+function setPostStage(stage) {
+  post.stage = stage;
+  $('postSend').textContent = stage === 'confirm' ? '✓ Preview OK — Post now' : 'Preview →';
+}
+function openPostDialog(img) {
+  post.img = img;
+  $('postImg').src = `data:image/png;base64,${img.base64}`;
+  $('postMeta').textContent = `${img.label} · ${img.width}×${img.height}`;
+  $('postCaption').value = '';
+  setPostStage('compose');
+  $('postDialog').showModal();
+}
+async function onPostSend() {
+  const img = post.img; if (!img) return;
+  const caption = $('postCaption').value.trim();
+  const platforms = [];
+  if ($('pfFb').checked) platforms.push('facebook');
+  if ($('pfIg').checked) platforms.push('instagram');
+  if (!platforms.length) return toast('Pick at least one platform.', 'err');
+  const mode = post.stage === 'confirm' ? 'send' : 'preview';
+  const btn = $('postSend'); btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${mode === 'send' ? 'Posting…' : 'Checking…'}`;
   try {
-    toast('Composing preview…', 'ok');
-    const prev = await (await fetch(`${API}/post-social`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ base64: img.base64, caption, platforms, mode: 'preview' }) })).json();
-    if (!prev.ok) throw new Error(prev.error || 'preview failed');
-    if (!window.confirm(`Preview OK — really POST this now?\n\n${img.label} (${img.width}×${img.height})\nPlatforms: ${platforms.join(' + ')}\nCaption: ${caption || '(none)'}`)) return;
-    const sent = await (await fetch(`${API}/post-social`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ base64: img.base64, caption, platforms, mode: 'send' }) })).json();
-    if (!sent.ok) throw new Error(sent.error || 'send failed');
-    toast('Posted to ' + platforms.join(' + ') + ' 🎉', 'ok');
-  } catch (e) { toast('Social post failed: ' + e.message, 'err'); }
+    const r = await (await fetch(`${API}/post-social`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64: img.base64, caption, platforms, mode }) })).json();
+    if (!r.ok) throw new Error(r.error || `${mode} failed`);
+    if (mode === 'preview') { setPostStage('confirm'); }
+    else { $('postDialog').close(); setPostStage('compose'); toast('Posted to ' + platforms.join(' + ') + ' 🎉', 'ok'); }
+  } catch (e) { toast('Social post failed: ' + e.message, 'err'); setPostStage('compose'); }
+  finally { btn.disabled = false; }
 }
 
 // ── Downloads ───────────────────────────────────────────────────────────────

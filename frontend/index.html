@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Danzversity Flyer Pipeline</title>
+  <title>Danzversity Flyer Maker</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -14,31 +14,35 @@
   <header class="topbar">
     <img class="logo" src="https://www.danzversity.com/assets/img/danzversity-logo.png" alt="Danzversity" />
     <div class="titles">
-      <h1>Flyer Pipeline</h1>
-      <p>Master in &rarr; every size out · brand v<span id="brandVer">11</span></p>
+      <h1>Flyer Maker</h1>
+      <p>Pick a template, add a photo &mdash; get every size. <span class="faint">v<span id="brandVer">11</span></span></p>
     </div>
     <span id="driveBadge" class="badge badge-unknown">Drive: checking…</span>
   </header>
 
   <main>
-    <!-- COMPOSE -->
+    <!-- BUILD -->
     <section class="panel" id="createPanel">
-      <h2 class="step">① Compose a flyer</h2>
-      <div class="grid2">
+      <h2 class="step">① Build the flyer</h2>
+      <div class="grid3">
         <label class="field">Template
           <select id="tplSelect"></select>
         </label>
-        <label class="field">CTA URL <span id="urlStatus" class="url-status"></span>
+        <label class="field">Link on the flyer <span id="urlStatus" class="url-status"></span>
           <input id="ctaUrl" type="text" placeholder="https://danzversity.com/camps" autocomplete="off" />
+        </label>
+        <label class="field">Month <span class="muted">(Drive filing)</span>
+          <input id="month" type="month" />
         </label>
       </div>
       <div id="tplFields" class="tpl-fields"></div>
 
       <div class="moderow">
+        <span class="mode-label">Layout</span>
         <div class="seg" id="modeToggle">
-          <button class="seg-btn active" type="button" data-mode="scene">Scene on a plate</button>
-          <button class="seg-btn" type="button" data-mode="cutout">Cutout hero</button>
-          <button class="seg-btn" type="button" data-mode="photo">Photo fills the frame</button>
+          <button class="seg-btn active" type="button" data-mode="scene">Photo on background</button>
+          <button class="seg-btn" type="button" data-mode="cutout">Cutout on background</button>
+          <button class="seg-btn" type="button" data-mode="photo">Full-bleed photo</button>
         </div>
         <span class="muted" id="modeHint"></span>
       </div>
@@ -46,8 +50,8 @@
       <div class="picker-block" id="bgBlock">
         <div class="picker-head">
           <span>Background <span class="muted" id="bgSource"></span></span>
-          <label class="savechk"><input type="checkbox" id="saveBg" /> save upload to library</label>
-          <button id="uploadBgBtn" class="ghost sm" type="button">⬆ Upload background</button>
+          <button id="uploadBgBtn" class="ghost sm" type="button">⬆ Upload</button>
+          <label class="savechk"><input type="checkbox" id="saveBg" /> save to library</label>
           <input id="bgInput" type="file" accept="image/*" hidden />
         </div>
         <div id="bgPicker" class="thumbs">loading…</div>
@@ -56,53 +60,27 @@
 
       <div class="picker-block">
         <div class="picker-head">
-          <span id="photoLabel">Photo of real people <span class="muted">(optional)</span></span>
-          <label class="savechk"><input type="checkbox" id="savePhoto" /> save upload to library</label>
-          <button id="addPhotoBtn" class="ghost sm" type="button">⬆ Upload photo</button>
+          <span id="photoLabel">Photo <span class="muted">(optional)</span></span>
+          <button id="addPhotoBtn" class="ghost sm" type="button">⬆ Upload</button>
+          <label class="savechk"><input type="checkbox" id="savePhoto" /> save to library</label>
           <input id="photoInput" type="file" accept="image/*" hidden />
         </div>
         <div id="peoplePicker" class="thumbs">loading…</div>
         <div id="photoChosen" class="muted"></div>
       </div>
 
-      <label class="chk"><input type="checkbox" id="qrToggle" checked /> Include QR code <span class="muted">— auto-off for paid (Meta/PMax)</span></label>
+      <label class="chk"><input type="checkbox" id="qrToggle" checked /> Include QR code <span class="muted">— removed automatically on paid-ad templates</span></label>
 
       <div class="create-actions">
-        <button id="composeBtn" class="primary big">Compose flyer →</button>
+        <button id="composeBtn" class="primary big">Create flyer →</button>
         <span id="composeHint" class="muted"></span>
       </div>
       <div id="adcopy" class="adcopy hidden"></div>
     </section>
 
-    <!-- INPUT / SIZE -->
-    <section class="panel" id="inputPanel">
-      <h2 class="step">② Size &amp; ship <span class="muted">— auto-filled when you pick a master above, or drop your own</span></h2>
-      <div class="grid2">
-        <label class="field">Template / event name
-          <input id="template" type="text" placeholder="Summer Camp Week 1" autocomplete="off" />
-        </label>
-        <label class="field">Month <span class="muted">(Drive filing)</span>
-          <input id="month" type="month" />
-        </label>
-      </div>
-
-      <fieldset class="families">
-        <legend>Families to generate</legend>
-        <label class="chk"><input type="checkbox" id="famA" checked /> <b>Style A</b> — Text-Rich <span class="muted">organic · 7 sizes</span></label>
-        <label class="chk"><input type="checkbox" id="famALite" checked /> <b>Style A-Lite</b> — Photo-Dominant <span class="muted">paid · 4 sizes</span></label>
-        <label class="chk"><input type="checkbox" id="famB" /> <b>Style B</b> — Hype <span class="muted">organic · 7 sizes</span></label>
-      </fieldset>
-
-      <div class="masters" id="masters">
-        <!-- dropzones injected by app.js -->
-      </div>
-
-      <button id="generateBtn" class="primary big">Generate all sizes</button>
-      <p class="hint">Drop the Ideogram-approved <b>4:5 master(s)</b>. The tool derives every distribution size, builds Meta &amp; PMax bundles, and can file everything to Drive. No master is altered — derivation only.</p>
-    </section>
-
     <!-- RESULTS -->
     <section class="panel hidden" id="resultsPanel">
+      <h2 class="step">② Your flyers</h2>
       <div id="summary" class="summary"></div>
       <div id="warnings"></div>
 
@@ -121,9 +99,53 @@
 
       <div id="grid" class="grid"></div>
     </section>
+
+    <!-- ADVANCED: manual master upload (Ideogram workflow) -->
+    <details class="panel advanced" id="inputPanel">
+      <summary>Advanced — bring your own master images (Ideogram workflow)</summary>
+      <div class="advanced-body">
+        <label class="field">Event name <span class="muted">(filenames &amp; Drive folder)</span>
+          <input id="template" type="text" placeholder="Summer Camp Week 1" autocomplete="off" />
+        </label>
+
+        <fieldset class="families">
+          <legend>Styles to generate</legend>
+          <label class="chk"><input type="checkbox" id="famA" checked /> <b>Style A</b> — Text-Rich <span class="muted">organic · 7 sizes</span></label>
+          <label class="chk"><input type="checkbox" id="famALite" checked /> <b>Style A-Lite</b> — Photo-Dominant <span class="muted">paid · 4 sizes</span></label>
+          <label class="chk"><input type="checkbox" id="famB" /> <b>Style B</b> — Hype <span class="muted">organic · 7 sizes</span></label>
+        </fieldset>
+
+        <div class="masters" id="masters">
+          <!-- dropzones injected by app.js -->
+        </div>
+
+        <button id="generateBtn" class="primary big">Generate all sizes</button>
+        <p class="hint">Drop Ideogram-approved <b>4:5 master(s)</b>. Every distribution size is derived — Meta &amp; PMax bundles included, Drive filing optional. Masters are never altered.</p>
+      </div>
+    </details>
   </main>
 
   <div id="toast" class="toast hidden"></div>
+
+  <!-- social post dialog -->
+  <dialog id="postDialog">
+    <h3>Post to social</h3>
+    <div class="post-preview">
+      <img id="postImg" alt="" />
+      <span id="postMeta" class="muted"></span>
+    </div>
+    <label class="field">Caption
+      <textarea id="postCaption" rows="3" placeholder="Write the caption…"></textarea>
+    </label>
+    <div class="post-platforms">
+      <label class="chk"><input type="checkbox" id="pfFb" checked /> Facebook</label>
+      <label class="chk"><input type="checkbox" id="pfIg" checked /> Instagram</label>
+    </div>
+    <div class="dialog-actions">
+      <button id="postCancel" class="ghost" type="button">Cancel</button>
+      <button id="postSend" class="primary" type="button">Preview →</button>
+    </div>
+  </dialog>
 
   <!-- tile template -->
   <template id="tileTpl">
@@ -134,12 +156,8 @@
         <span class="tile-dims muted"></span>
       </div>
       <div class="tile-row">
-        <div class="seg" role="group" aria-label="crop mode">
-          <button class="seg-btn" data-policy="letterbox">Fit</button>
-          <button class="seg-btn" data-policy="smart">Fill</button>
-        </div>
-        <button class="dl-one ghost sm">⬇</button>
-        <button class="post-one ghost sm" title="Post to Facebook + Instagram via the social rail">📣</button>
+        <button class="dl-one ghost sm">⬇ PNG</button>
+        <button class="post-one ghost sm" title="Post to Facebook / Instagram">📣 Post</button>
       </div>
     </div>
   </template>
