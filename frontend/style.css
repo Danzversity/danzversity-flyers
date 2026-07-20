@@ -128,6 +128,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .seg-btn.active { background: var(--gold); color: #000; }
 .tile.busy { opacity: .55; pointer-events: none; }
 
+/* Stale-page banner */
+.update-banner {
+  position: sticky; top: 0; z-index: 60;
+  background: var(--gold); color: #000; font-size: 14px; font-weight: 700;
+  padding: 11px 20px; text-align: center;
+}
+.update-banner .sm-reload { margin-left: 10px; padding: 5px 14px; font-size: 13px; background: #000; color: var(--gold); border: none; }
+
 /* Toast */
 .toast {
   position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);

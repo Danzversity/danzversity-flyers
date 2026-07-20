@@ -44,9 +44,30 @@ function init() {
 }
 
 async function checkHealth() {
-  try { const h = await (await fetch(`${API}/health`)).json(); $('brandVer').textContent = (h.brandVersion || '11').replace(/\.0\.0$/, ''); setDriveBadge(h.driveConfigured); }
-  catch (e) { setDriveBadge(false, true); }
+  try {
+    const h = await (await fetch(`${API}/health`)).json();
+    $('brandVer').textContent = (h.brandVersion || '11').replace(/\.0\.0$/, '');
+    setDriveBadge(h.driveConfigured);
+    if (!state.loadedVersion) state.loadedVersion = h.version; // the server version this page was built against
+    else if (h.version && h.version !== state.loadedVersion) showUpdateBanner();
+  } catch (e) { setDriveBadge(false, true); }
 }
+
+// ── Stale-page guard ─────────────────────────────────────────────────────────
+// The server redeploying mid-session once left an open tab whose internal
+// layout state disagreed with its buttons. Any version drift now demands a
+// reload before more work happens.
+function showUpdateBanner() {
+  if ($('updateBanner')) return;
+  const b = el('div', 'update-banner');
+  b.id = 'updateBanner';
+  b.innerHTML = '⚠ Flyer Maker was updated — reload this page before composing. ';
+  const btn = el('button', 'primary sm-reload', 'Reload now'); btn.type = 'button';
+  btn.addEventListener('click', () => window.location.reload());
+  b.appendChild(btn);
+  document.body.prepend(b);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkHealth(); });
 function setDriveBadge(configured, errored) {
   const b = $('driveBadge'); state.driveConfigured = !!configured;
   if (errored) { b.textContent = 'API offline'; b.className = 'badge badge-off'; return; }
@@ -300,14 +321,24 @@ function buildComposeFd() {
     toast('Pick or upload a background.', 'err'); return null;
   }
 
+  // Photo-on-background / cutout without a photo composes the background alone
+  // — legal, but usually a slot mix-up. Ask before rendering.
+  if (create.mode !== 'photo' && !create.photoFile && !create.selectedPersonId) {
+    if (!window.confirm('No photo picked — the background ALONE will fill the flyer.\n\nContinue without a photo?')) return null;
+  }
+
   if (!$('qrToggle').checked) content.qr = false;
   const fd = new FormData();
   fd.append('templateKey', t.key);
   fd.append('content', JSON.stringify(content));
   fd.append('mode', create.mode);
   fd.append('style', JSON.stringify(create.style));
-  if (create.bgFile) { fd.append('background', create.bgFile); if ($('saveBg').checked) fd.append('saveBg', 'true'); }
-  else if (create.selectedBg) fd.append('backgroundId', create.selectedBg);
+  // Full-bleed uses NO background — never send one (the server rejects the
+  // contradictory combo as a stale-client signal).
+  if (create.mode !== 'photo') {
+    if (create.bgFile) { fd.append('background', create.bgFile); if ($('saveBg').checked) fd.append('saveBg', 'true'); }
+    else if (create.selectedBg) fd.append('backgroundId', create.selectedBg);
+  }
   if (create.photoFile) { fd.append('photo', create.photoFile); if ($('savePhoto').checked) fd.append('savePhoto', 'true'); }
   else if (create.selectedPersonId) fd.append('personId', create.selectedPersonId);
   return { t, content, fd };
@@ -417,8 +448,22 @@ function renderResults(data) {
   const organic = state.images.filter((i) => i.channel === 'organic').length;
   const paid = state.images.filter((i) => i.channel === 'paid').length;
 
+  // Version handshake: a compose answered by a NEWER server than this page
+  // loaded from means a deploy happened mid-session — demand a reload.
+  if (data.version && state.loadedVersion && data.version !== state.loadedVersion) showUpdateBanner();
+
+  // Say exactly what was composed — layout + which assets — so a wrong slot
+  // or wrong mode is visible in one glance, not by squinting at the art.
+  const MODE_LABELS = { scene: 'Photo on background', cutout: 'Cutout on background', photo: 'Full-bleed photo' };
+  const assetName = (list, idOrName) => { const hit = (list || []).find((x) => x.id === idOrName); return hit ? hit.name : idOrName; };
+  let usedLine = data.mode ? ` · <b>${MODE_LABELS[data.mode] || data.mode}</b>` : '';
+  if (data.used) {
+    if (data.used.background) usedLine += ` · bg: ${assetName(create.backgrounds, data.used.background)}`;
+    usedLine += ` · photo: ${data.used.photo ? assetName(create.people, data.used.photo) : '<b>none</b>'}`;
+  }
+
   $('resultsPanel').classList.remove('hidden');
-  $('summary').innerHTML = `<b>${state.template}</b> · ${state.images.length} images (${organic} organic, ${paid} paid) · ${data.renderMs} ms · slug <code>${state.slug}</code>`;
+  $('summary').innerHTML = `<b>${state.template}</b>${usedLine} · ${state.images.length} images (${organic} organic, ${paid} paid) · ${data.renderMs} ms`;
   const warn = $('warnings'); warn.innerHTML = ''; (data.warnings || []).forEach((w) => warn.appendChild(el('div', 'note note-warn', '⚠ ' + w)));
   $('cntOrganic').textContent = organic; $('cntPaid').textContent = paid;
   setDriveBadge(data.driveConfigured);

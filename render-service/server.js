@@ -58,7 +58,7 @@ const social = require('./integrations/social');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.2.4'; // 1.2.4: init hardening — mode default matches UI, listeners before network, /templates retry; server requires explicit mode
+const VERSION = '1.2.5'; // 1.2.5: stale-client kill switch — contradiction guard, version handshake + reload banner, no-cache app files, result shows mode+assets
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -100,8 +100,14 @@ const upload = multer({
   limits: { fileSize: 30 * 1024 * 1024, files: 4 },
 });
 
-// Serve the frontend (Cloudflare Pages serves it in prod; this is for local dev).
-app.use(express.static(path.join(__dirname, '..', 'frontend')));
+// Serve the frontend. no-cache (NOT no-store): the browser must revalidate
+// index/app/css on every load so a deploy can never leave a user on a stale
+// page whose internal state disagrees with the server.
+app.use(express.static(path.join(__dirname, '..', 'frontend'), {
+  setHeaders: (res, filePath) => {
+    if (/\.(html|js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function parseFamilies(raw) {
@@ -336,6 +342,14 @@ async function gatherComposeInputs(req) {
   const mode = req.body.mode;
   if (!['photo', 'scene', 'cutout'].includes(mode)) throw { status: 400, message: 'mode required: photo | scene | cutout' };
 
+  // CONTRADICTION GUARD: full-bleed uses no background — a request carrying
+  // both mode=photo AND a background is a stale/buggy client whose layout
+  // state diverged from what the operator picked. Refuse loudly; the current
+  // frontend never sends this combination.
+  if (mode === 'photo' && ((req.files && req.files.background && req.files.background[0]) || req.body.backgroundId)) {
+    throw { status: 400, message: 'Conflicting inputs: full-bleed mode with a background attached. Your page is outdated — reload it and compose again.' };
+  }
+
   // Gather the photo (uploaded, optionally saved to library, OR a library person).
   let photoBuf = null;
   const photoUp = req.files && req.files.photo && req.files.photo[0];
@@ -367,7 +381,13 @@ async function gatherComposeInputs(req) {
     // (no API call — the chassis bands + feathers it onto the plate).
     person = photoBuf ? (mode === 'cutout' ? await removebg.cutoutCached(photoBuf) : photoBuf) : null;
   }
-  return { templateKey, content, style, mode, background, person, backgroundId: req.body.backgroundId || null };
+  // What was actually used — echoed to the frontend so the result can say
+  // "Photo on background · bg: Grafitti.png · photo: PXL_x.jpg" at a glance.
+  const used = {
+    background: mode === 'photo' ? null : (bgUp ? (bgUp.originalname || 'upload') : req.body.backgroundId),
+    photo: photoUp ? (photoUp.originalname || 'upload') : (req.body.personId || null),
+  };
+  return { templateKey, content, style, mode, background, person, used, backgroundId: req.body.backgroundId || null };
 }
 const composeUpload = upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'background', maxCount: 1 }]);
 
@@ -375,7 +395,7 @@ const composeUpload = upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'ba
 app.post('/compose', composeUpload, async (req, res) => {
   const t0 = Date.now();
   try {
-    const { templateKey, content, style, mode, background, person } = await gatherComposeInputs(req);
+    const { templateKey, content, style, mode, background, person, used } = await gatherComposeInputs(req);
     const result = await composeFlyer({ templateKey, content, style, background, person, slug: req.body.slug || content.title });
     const images = result.images.map((i) => ({
       family: i.family, channel: i.channel, sizeKey: i.sizeKey, label: i.label,
@@ -387,7 +407,7 @@ app.post('/compose', composeUpload, async (req, res) => {
     try { adCopy = assemble(templateKey, content).adCopy; } catch (_) { /* non-fatal */ }
 
     res.json({
-      ok: true, templateKey, mode, family: result.family, channel: result.channel, slug: result.slug, layout: result.layout,
+      ok: true, templateKey, mode, used, version: VERSION, family: result.family, channel: result.channel, slug: result.slug, layout: result.layout,
       style: result.style, month: content.month || '', driveConfigured: gdrive.isConfigured(), adCopy,
       counts: { total: images.length }, renderMs: Date.now() - t0, images,
     });
