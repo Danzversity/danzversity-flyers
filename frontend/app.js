@@ -12,7 +12,10 @@ const FAMILIES = [
 
 const state = { files: { 'A': null, 'A-Lite': null, 'B': null }, images: [], template: '', month: '', slug: '', driveConfigured: false, activeTab: 'organic' };
 const create = {
-  templates: [], backgrounds: [], people: [], selectedBg: null, bgFile: null, selectedPersonId: null, photoFile: null, mode: 'photo',
+  // mode MUST default to 'scene' — the HTML marks that button active. A
+  // mismatched default here once shipped a full-bleed flyer while the UI
+  // showed "Photo on background" (init bailed mid-deploy before correcting it).
+  templates: [], backgrounds: [], people: [], selectedBg: null, bgFile: null, selectedPersonId: null, photoFile: null, mode: 'scene',
   style: { font: 'classic', accent: 'gold', headline: 'accent' },
   styleOptions: null, bgVibes: [],
   aiBgs: [], selectedAiIdx: null, // session-only Ideogram background candidates
@@ -53,23 +56,10 @@ function setDriveBadge(configured, errored) {
 
 // ── ① COMPOSE ──────────────────────────────────────────────────────────────────
 async function initCreate() {
-  let j;
-  try { j = await (await fetch(`${API}/templates`)).json(); create.templates = j.templates || []; }
-  catch (e) { return; }
-  create.styleOptions = j.styles || null;
-  create.bgVibes = j.bgVibes || [];
-  buildStyleRow();
-  buildVibeSelect();
-  renderLookChips();
-  const sel = $('tplSelect');
-  const groups = {}; create.templates.forEach((t) => { (groups[t.group] = groups[t.group] || []).push(t); });
-  sel.innerHTML = '';
-  Object.keys(groups).forEach((g) => {
-    const og = document.createElement('optgroup'); og.label = g;
-    groups[g].forEach((t) => { const o = document.createElement('option'); o.value = t.key; o.textContent = t.label + (t.channel === 'paid' ? '  ·  paid' : ''); og.appendChild(o); });
-    sel.appendChild(og);
-  });
-  sel.addEventListener('change', onTemplateChange);
+  // Wire EVERY control and settle the default mode BEFORE any network call —
+  // a failed or hanging /templates (e.g. the server restarting mid-deploy)
+  // must never leave a dead form or a layout state that disagrees with the UI.
+  $('tplSelect').addEventListener('change', onTemplateChange);
   $('ctaUrl').addEventListener('blur', () => checkUrl($('ctaUrl').value));
   $('composeBtn').addEventListener('click', onCompose);
   $('uploadBgBtn').addEventListener('click', () => $('bgInput').click());
@@ -82,6 +72,31 @@ async function initCreate() {
   $('genBgBtn').addEventListener('click', onGenBgs);
   $('saveLookBtn').addEventListener('click', onSaveLook);
   setMode('scene');
+  renderLookChips();
+
+  // Load templates with retries (the server may be mid-restart on a deploy).
+  let j = null;
+  for (let attempt = 1; attempt <= 3 && !j; attempt++) {
+    try { j = await (await fetch(`${API}/templates`)).json(); }
+    catch (e) { if (attempt < 3) await new Promise((r) => setTimeout(r, 1500 * attempt)); }
+  }
+  if (!j || !j.templates || !j.templates.length) {
+    toast('Couldn’t load templates — the server may be restarting. Reload the page in a moment.', 'err');
+    return;
+  }
+  create.templates = j.templates;
+  create.styleOptions = j.styles || null;
+  create.bgVibes = j.bgVibes || [];
+  buildStyleRow();
+  buildVibeSelect();
+  const sel = $('tplSelect');
+  const groups = {}; create.templates.forEach((t) => { (groups[t.group] = groups[t.group] || []).push(t); });
+  sel.innerHTML = '';
+  Object.keys(groups).forEach((g) => {
+    const og = document.createElement('optgroup'); og.label = g;
+    groups[g].forEach((t) => { const o = document.createElement('option'); o.value = t.key; o.textContent = t.label + (t.channel === 'paid' ? '  ·  paid' : ''); og.appendChild(o); });
+    sel.appendChild(og);
+  });
   onTemplateChange();
   loadLibraries();
 }

@@ -58,7 +58,7 @@ const social = require('./integrations/social');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.2.3'; // 1.2.3: verifyUrl over node:https (undici fetch broken on Render — every check returned fail)
+const VERSION = '1.2.4'; // 1.2.4: init hardening — mode default matches UI, listeners before network, /templates retry; server requires explicit mode
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -331,7 +331,10 @@ async function gatherComposeInputs(req) {
   // mode: 'photo' = photo fills the frame (full-bleed); 'scene' = the WHOLE photo
   // sits on a plate (band + feather, NO Remove.bg — best for group/action shots);
   // 'cutout' = a single subject is lifted onto a plate (Remove.bg).
-  const mode = ['photo', 'scene', 'cutout'].includes(req.body.mode) ? req.body.mode : 'photo';
+  // REQUIRED — a missing mode used to silently default to full-bleed, which
+  // once shipped the wrong layout. Refuse instead of guessing.
+  const mode = req.body.mode;
+  if (!['photo', 'scene', 'cutout'].includes(mode)) throw { status: 400, message: 'mode required: photo | scene | cutout' };
 
   // Gather the photo (uploaded, optionally saved to library, OR a library person).
   let photoBuf = null;
