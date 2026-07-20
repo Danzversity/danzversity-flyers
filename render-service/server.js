@@ -58,7 +58,7 @@ const social = require('./integrations/social');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.2.1'; // 1.2.1: QR honors the typed link; layout B kicker lifted+enlarged, logo gap closed
+const VERSION = '1.2.2'; // 1.2.2: auto-normalize typed times (630PM → 6:30PM); per-template QR label (younity = SCAN TO RSVP)
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';

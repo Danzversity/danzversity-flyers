@@ -326,7 +326,7 @@ const CHASSIS = {
   'adult-paid': { layout: 'A-Lite', headline: 'ADULT HIP HOP', subhead: 'FIRST CLASS FREE · NO EXPERIENCE NEEDED', url: 'DANZVERSITY.COM/ADULTS', qr: false },
   'breakin': { layout: 'A', kicker: PROOF_KICKER, headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM', infoLines: ['{time}', '{ages}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/BREAKIN', qr: true },
   'breakin-paid': { layout: 'A-Lite', headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM · {time}', url: 'DANZVERSITY.COM/BREAKIN', qr: false },
-  'younity-nights': { layout: 'B', kicker: 'FREE · ALL AGES · VISITORS WELCOME', headline: '(YOU)NITY NIGHTS', subhead: '{date} · {time}', tagline: '{lineup}', compliance: AACME_STATEMENT, cta: 'RSVP — FREE', url: 'DANZVERSITY.COM', qr: true },
+  'younity-nights': { layout: 'B', kicker: 'FREE · ALL AGES · VISITORS WELCOME', headline: '(YOU)NITY NIGHTS', subhead: '{date} · {time}', tagline: '{lineup}', compliance: AACME_STATEMENT, cta: 'RSVP — FREE', qrLabel: 'SCAN TO RSVP', url: 'DANZVERSITY.COM', qr: true },
   'workshop-internal': { layout: 'A', kicker: PROOF_KICKER, headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
   'workshop-nametalent': { layout: 'B', kicker: PROOF_KICKER, headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
   'battle': { layout: 'B', kicker: PROOF_KICKER, headline: 'DANCE BATTLE', subhead: '1V1 ALL STYLES', infoLines: ['{date}', '{entry}'], urgency: '{urgency}', cta: 'STEP IN THE CYPHER', url: 'DANZVERSITY.COM', qr: true },
@@ -351,16 +351,22 @@ function buildChassis(key, content = {}) {
   for (const k of Object.keys(expanded)) if (filled[k] == null || filled[k] === '') filled[k] = expanded[k];
 
   const fill = (s) => String(s).replace(/\{(\w+)\}/g, (m, k) => (filled[k] != null ? filled[k] : '')).replace(/\s{2,}/g, ' ').trim();
+  // Normalize sloppy typed times — "630PM" / "930 pm" → "6:30PM" / "9:30PM".
+  // Fires only on a 3-4 digit run directly followed by AM/PM, so years, ages
+  // and prices can't match. Applied to display fields; never to url/compliance
+  // (verbatim grant statement) / quote (verbatim customer words).
+  const normTimes = (s) => String(s).replace(/\b(\d{1,2})(\d{2})\s*([AP]M)\b/gi, (m, h, mm, ap) => `${parseInt(h, 10)}:${mm}${ap.toUpperCase()}`);
+  const fillT = (s) => normTimes(fill(s));
 
   const spec = { layout: base.layout, logo: true };
-  if (base.kicker) { const v = fill(base.kicker); if (v) spec.kicker = v; }
-  if (base.headline) spec.headline = fill(base.headline);
-  if (base.subhead) { const v = fill(base.subhead); if (v) spec.subhead = v; }
-  if (base.tagline) spec.tagline = fill(base.tagline);
-  if (base.infoLines) spec.infoLines = base.infoLines.map(fill).filter(Boolean);
-  if (base.price) { const v = fill(base.price); if (v) spec.price = v; }
-  if (base.cta) spec.cta = fill(base.cta);
-  if (base.urgency) { const v = fill(base.urgency); if (v) spec.urgency = v; }
+  if (base.kicker) { const v = fillT(base.kicker); if (v) spec.kicker = v; }
+  if (base.headline) spec.headline = fillT(base.headline);
+  if (base.subhead) { const v = fillT(base.subhead); if (v) spec.subhead = v; }
+  if (base.tagline) spec.tagline = fillT(base.tagline);
+  if (base.infoLines) spec.infoLines = base.infoLines.map(fillT).filter(Boolean);
+  if (base.price) { const v = fillT(base.price); if (v) spec.price = v; }
+  if (base.cta) spec.cta = fillT(base.cta);
+  if (base.urgency) { const v = fillT(base.urgency); if (v) spec.urgency = v; }
   if (base.compliance) spec.compliance = fill(base.compliance);
   if (base.quote) spec.quote = fill(base.quote);
   if (base.keyword) spec.keyword = fill(base.keyword);
@@ -371,6 +377,7 @@ function buildChassis(key, content = {}) {
   // the template default. content.url was previously ignored — the QR always
   // pointed at the default no matter what the operator typed.
   if (base.qr && content.qr !== false) spec.qr = content.qrUrl || content.url || t.defaultUrl;
+  if (base.qrLabel) spec.qrLabel = base.qrLabel; // template-specific QR tile label (e.g. SCAN TO RSVP)
   return spec;
 }
 

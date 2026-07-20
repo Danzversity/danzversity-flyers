@@ -340,7 +340,7 @@ async function compose(o) {
 
   if (spec.qr) {
     const qs = Math.round(W * 0.155);
-    const tile = await qrTile(spec.qr, qs, spec.cta ? 'SCAN TO REGISTER' : null);
+    const tile = await qrTile(spec.qr, qs, spec.qrLabel || (spec.cta ? 'SCAN TO REGISTER' : null));
     const tm = await sharp(tile).metadata();
     layers.push({ input: tile, top: H - tm.height - Math.round(H * 0.05), left: W - tm.width - Math.round(W * 0.045) });
   }
