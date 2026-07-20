@@ -1,6 +1,8 @@
 // Prompt assembler + URL verifier — the bridge from form content to a
 // ready-to-generate Ideogram request (and the ad copy that rides alongside it).
 
+const https = require('https');
+const http = require('http');
 const templates = require('../templates');
 
 const TOKEN = /\{(\w+)\}/g;
@@ -56,14 +58,37 @@ function assemble(templateKey, content = {}) {
 /**
  * Live-check a CTA URL (Flyer Design Standard Standing Rule 1). Follows
  * redirects; a 2xx/3xx final is OK. Never throws.
+ *
+ * Over node:https, NOT fetch/undici — undici is broken on Render (same
+ * failure class that forced gdrive.js off googleapis: every request dies
+ * "fetch failed" while plain node:https to the same host works).
  */
+function probe(url, method, redirectsLeft) {
+  return new Promise((resolve, reject) => {
+    let u;
+    try { u = new URL(url); } catch (e) { return reject(new Error('bad url')); }
+    const lib = u.protocol === 'http:' ? http : https;
+    const req = lib.request(u, { method, headers: { 'User-Agent': 'Mozilla/5.0 (DanzversityFlyerPipeline)' }, timeout: 8000 }, (res) => {
+      res.resume(); // drain so the socket frees
+      const st = res.statusCode || 0;
+      if (st >= 300 && st < 400 && res.headers.location && redirectsLeft > 0) {
+        resolve(probe(new URL(res.headers.location, u).toString(), method, redirectsLeft - 1));
+      } else {
+        resolve({ status: st, finalUrl: u.toString() });
+      }
+    });
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 async function verifyUrl(url) {
   if (!url) return { url, ok: false, status: 0, error: 'no url' };
-  const opts = { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0 (DanzversityFlyerPipeline)' } };
   try {
-    let res = await fetch(url, { method: 'HEAD', ...opts });
-    if (res.status === 405 || res.status === 501) res = await fetch(url, { method: 'GET', ...opts });
-    return { url, ok: res.status >= 200 && res.status < 400, status: res.status, finalUrl: res.url };
+    let r = await probe(url, 'HEAD', 5);
+    if (r.status === 405 || r.status === 501) r = await probe(url, 'GET', 5);
+    return { url, ok: r.status >= 200 && r.status < 400, status: r.status, finalUrl: r.finalUrl };
   } catch (e) {
     return { url, ok: false, status: 0, error: e.message };
   }

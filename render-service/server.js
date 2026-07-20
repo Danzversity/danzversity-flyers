@@ -58,7 +58,7 @@ const social = require('./integrations/social');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.2.2'; // 1.2.2: auto-normalize typed times (630PM → 6:30PM); per-template QR label (younity = SCAN TO RSVP)
+const VERSION = '1.2.3'; // 1.2.3: verifyUrl over node:https (undici fetch broken on Render — every check returned fail)
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
