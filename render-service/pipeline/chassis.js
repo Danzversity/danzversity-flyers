@@ -92,7 +92,10 @@ function svgStyleA(W, H, spec, opts = {}) {
   // logo. Layout B passes it; layout A (Camp) passes none, so its blessed spacing holds.
   const ts = F(opts.topShift || 0);
   // Kicker — eyebrow line above the headline (proof / tenure / credibility).
-  if (spec.kicker) L.push(t(spec.kicker, F(0.205) + ts, F(0.023), A, { ls: 3, maxW: W * 0.9 }));
+  // kickerY/kickerSize are opts so big-headline layouts (B: 0.080H) can lift
+  // and enlarge it — at the A defaults the B headline's cap height reaches the
+  // kicker baseline and they collide.
+  if (spec.kicker) L.push(t(spec.kicker, F(opts.kickerY || 0.205) + ts, F(opts.kickerSize || 0.023), A, { ls: 3, maxW: W * 0.9 }));
   if (spec.headline) {
     L.push(t(spec.headline, F(0.262) + ts, hSize, style.white ? WHT : A, { maxW: W * 0.9, ...hFont }));
     if (opts.headlineBar) L.push(`<rect x="${cx - F(0.14)}" y="${F(0.275) + ts}" width="${F(0.28)}" height="${Math.max(3, F(0.006))}" fill="${A}"/>`);
@@ -182,7 +185,7 @@ function chassisSVG(W, H, spec) {
   const layout = spec.layout || 'A';
   if (layout === 'A-Lite') return svgALite(W, H, spec);
   if (layout === 'testimonial') return svgTestimonial(W, H, spec);
-  if (layout === 'B') return svgStyleA(W, H, spec, { headlineSize: 0.080, headlineBar: true, scrimTop: 0.40, topShift: 0.045 });
+  if (layout === 'B') return svgStyleA(W, H, spec, { headlineSize: 0.080, headlineBar: true, scrimTop: 0.40, topShift: 0.02, kickerY: 0.192, kickerSize: 0.027 });
   return svgStyleA(W, H, spec, { headlineSize: 0.062 });
 }
 

@@ -58,7 +58,7 @@ const social = require('./integrations/social');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.2.0'; // 1.2.0: style packs (fonts/accents/looks) + /compose-variants + /generate-backgrounds
+const VERSION = '1.2.1'; // 1.2.1: QR honors the typed link; layout B kicker lifted+enlarged, logo gap closed
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';

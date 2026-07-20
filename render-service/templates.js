@@ -367,7 +367,10 @@ function buildChassis(key, content = {}) {
   if (base.reviewer) spec.reviewer = fill(base.reviewer);
   spec.url = fill(base.url) || 'DANZVERSITY.COM';
   spec.address = FOOTER_ADDRESS;
-  if (base.qr && content.qr !== false) spec.qr = content.qrUrl || t.defaultUrl;
+  // QR target: explicit qrUrl > the form's "Link on the flyer" (content.url) >
+  // the template default. content.url was previously ignored — the QR always
+  // pointed at the default no matter what the operator typed.
+  if (base.qr && content.qr !== false) spec.qr = content.qrUrl || content.url || t.defaultUrl;
   return spec;
 }
 
