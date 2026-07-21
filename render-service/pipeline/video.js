@@ -24,10 +24,13 @@ const sharp = require('sharp');
 const QRCode = require('qrcode');
 const brand = require('../brand');
 
-// Pinned static binaries by default; FFMPEG_PATH/FFPROBE_PATH override for
-// environments that provide their own (also the local-test escape hatch when
-// the ffmpeg-static postinstall download is being slow/truncated).
-const FFMPEG = process.env.FFMPEG_PATH || require('ffmpeg-static');
+// Binaries ship INSIDE the npm packages (@ffmpeg-installer bundles per-platform
+// tarballs; ffprobe-static bundles in-package too). Do NOT switch to
+// ffmpeg-static: its postinstall downloads ~120MB from GitHub releases at
+// install time and truncates/fails on flaky networks — it broke the Render
+// build AND two local installs on 2026-07-21. FFMPEG_PATH/FFPROBE_PATH
+// override for environments that provide their own.
+const FFMPEG = process.env.FFMPEG_PATH || require('@ffmpeg-installer/ffmpeg').path;
 const FFPROBE = process.env.FFPROBE_PATH || require('ffprobe-static').path;
 
 const FONTS_DIR = path.join(__dirname, '..', '..', 'fonts');

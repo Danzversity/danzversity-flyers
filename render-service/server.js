@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.4.1'; // 1.4.0: VIDEO — cut clips to the Video Output Standard (hook + watermark + brand end-card + ffprobe gate)
+const VERSION = '1.4.2'; // 1.4.2: ffmpeg via @ffmpeg-installer (binary in the npm tarball — ffmpeg-static's GitHub download broke the Render build)
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
