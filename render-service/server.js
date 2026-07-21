@@ -59,7 +59,7 @@ const captions = require('./integrations/captions');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.3.1'; // 1.3.1: smart placements — per-size routing (feed/story/FB-only), Publish-everywhere plan, rail calls over node:https
+const VERSION = '1.3.2'; // 1.3.2: honest partial-send reporting (per-platform ✓/✗); rail v3 waits for IG container processing
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -183,7 +183,9 @@ app.post('/post-social', async (req, res) => {
     // Meta wants JPEG — transcode whatever family/size PNG comes in.
     const jpeg = await sharp(Buffer.from(base64, 'base64')).jpeg({ quality: 92 }).toBuffer();
     const result = await social.post({ imageBuffer: jpeg, caption, platforms, placement, mode, link });
-    res.json({ ok: true, mode, placement, result });
+    // ok reflects the rail's verdict — false on a partial send (per-platform
+    // detail rides in result.results).
+    res.json({ ok: result.ok !== false, mode, placement, result });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

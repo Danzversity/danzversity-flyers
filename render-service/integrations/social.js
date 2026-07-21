@@ -45,7 +45,11 @@ const { postJson } = require('./httpz');
 async function post({ imageBuffer, caption = '', platforms = ['facebook', 'instagram'], placement = 'feed', mode = 'preview', link }) {
   if (!RAIL_KEY) throw new Error('SOCIAL_RAIL_KEY not set on this server — add it in the Render dashboard env.');
   const { url } = registerPublic(imageBuffer);
-  const { status, json: data } = await postJson(RAIL_URL, { key: RAIL_KEY, mode, platforms, placement, text: caption, imageUrl: url, link }, { timeout: 30000 });
+  const { status, json: data } = await postJson(RAIL_URL, { key: RAIL_KEY, mode, platforms, placement, text: caption, imageUrl: url, link }, { timeout: 60000 });
+  // A rail 502 with sent:true is a PARTIAL result (e.g. FB posted, IG failed)
+  // — pass it through with its per-platform detail instead of throwing, so
+  // the UI can report exactly what went out and what didn't.
+  if (data && (data.sent || data.preview)) return { ...data, publicImageUrl: url };
   if (status < 200 || status >= 300) throw new Error(`social rail ${status}: ${JSON.stringify(data).slice(0, 300)}`);
   return { ...data, publicImageUrl: url };
 }

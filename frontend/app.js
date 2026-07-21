@@ -613,15 +613,33 @@ async function onPostSend() {
   const mode = post.stage === 'confirm' ? 'send' : 'preview';
   const btn = $('postSend'); btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${mode === 'send' ? 'Posting…' : 'Checking…'}`;
   try {
-    const done = [];
+    const summaries = []; let anyFail = false;
     for (const e of entries) {
       const r = await (await fetch(`${API}/post-social`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ base64: e.img.base64, caption: e.useCaption ? caption : '', platforms: e.platforms, placement: e.placement, mode }) })).json();
-      if (!r.ok) throw new Error(`${e.desc}: ${r.error || mode + ' failed'}`);
-      done.push(e.desc);
+      if (mode === 'preview') {
+        if (!r.ok) throw new Error(`${e.desc}: ${r.error || 'preview failed'}`);
+        continue;
+      }
+      // Send: report per platform — a partial (FB posted, IG failed) must
+      // never read as a total failure, or a blind retry double-posts.
+      const results = (r.result && r.result.results) || {};
+      if (Object.keys(results).length) {
+        const bits = Object.entries(results).map(([p, o]) => o.ok ? `${p} ✓` : (o.skipped ? `${p} skipped` : `${p} ✗ FAILED`));
+        if (Object.values(results).some((o) => !o.ok && !o.skipped)) anyFail = true;
+        summaries.push(`${e.desc} — ${bits.join(', ')}`);
+      } else if (!r.ok) {
+        anyFail = true;
+        summaries.push(`${e.desc} — failed: ${r.error || 'send failed'}`);
+      } else {
+        summaries.push(`${e.desc} — sent`);
+      }
     }
     if (mode === 'preview') { setPostStage('confirm'); }
-    else { $('postDialog').close(); setPostStage('compose'); toast('Posted 🎉 ' + done.join(' · '), 'ok'); }
+    else {
+      $('postDialog').close(); setPostStage('compose');
+      toast((anyFail ? '⚠ Partial send — retry ONLY the failed platform: ' : 'Posted 🎉 ') + summaries.join(' | '), anyFail ? 'err' : 'ok');
+    }
   } catch (e) { toast('Social post failed: ' + e.message, 'err'); setPostStage('compose'); }
   finally { btn.disabled = false; }
 }
