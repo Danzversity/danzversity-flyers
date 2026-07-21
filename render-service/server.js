@@ -37,6 +37,7 @@ const gdrive = require('./integrations/gdrive');
 const ideogram = require('./integrations/ideogram');
 const removebg = require('./integrations/removebg');
 const social = require('./integrations/social');
+const captions = require('./integrations/captions');
 
 // Install the bundled fonts where fontconfig looks. Render's librsvg IGNORES the
 // @font-face data-URIs embedded in the chassis SVG and resolves fonts through
@@ -58,7 +59,7 @@ const social = require('./integrations/social');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.2.5'; // 1.2.5: stale-client kill switch — contradiction guard, version handshake + reload banner, no-cache app files, result shows mode+assets
+const VERSION = '1.3.0'; // 1.3.0: caption suggestions — Claude-written (ANTHROPIC_API_KEY) with deterministic template fallback
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -152,6 +153,7 @@ app.get('/health', (req, res) => {
     ideogramConfigured: ideogram.isConfigured(),
     removebgConfigured: removebg.isConfigured(),
     socialConfigured: social.isConfigured(),
+    captionsAI: captions.isConfigured(),
     spendTelemetry: !!process.env.CHECKOUT_RAIL_KEY,
     library: library.status(),
     templateCount: templates.TEMPLATES.length,
@@ -184,6 +186,21 @@ app.post('/post-social', async (req, res) => {
     res.json({ ok: true, mode, result });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── Caption suggestions for the social-post dialog ──────────────────────────
+// AI (Claude) when ANTHROPIC_API_KEY is set; deterministic template captions
+// otherwise — the endpoint always succeeds with something usable.
+app.post('/suggest-captions', async (req, res) => {
+  const t0 = Date.now();
+  try {
+    const { templateKey, content } = req.body || {};
+    if (!templateKey) return res.status(400).json({ ok: false, error: 'templateKey required' });
+    const out = await captions.suggest(templateKey, content || {});
+    res.json({ ok: true, ...out, renderMs: Date.now() - t0 });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
   }
 });
 

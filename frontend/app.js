@@ -346,7 +346,7 @@ function buildComposeFd() {
 
 async function onCompose() {
   const built = buildComposeFd(); if (!built) return;
-  const { t, fd } = built;
+  const { t, content, fd } = built;
   $('variants').classList.add('hidden');
 
   const btn = $('composeBtn'); const orig = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Composing…';
@@ -354,6 +354,9 @@ async function onCompose() {
     const data = await (await fetch(`${API}/compose`, { method: 'POST', body: fd })).json();
     if (!data.ok) throw new Error(data.error || 'compose failed');
     data.template = t.label.replace(/🔥/g, '').trim();
+    // Remember what was composed so the post dialog can suggest captions
+    // from the flyer's own fields.
+    state.lastTemplateKey = t.key; state.lastContent = content;
     renderResults(data);
     if (data.adCopy) renderAdCopy(data.adCopy); else $('adcopy').classList.add('hidden');
     toast(`Composed ${data.counts.total} sizes in ${data.renderMs} ms.`, 'ok');
@@ -496,8 +499,28 @@ const post = { img: null, stage: 'compose' };
 function initPostDialog() {
   $('postCancel').addEventListener('click', () => $('postDialog').close());
   $('postSend').addEventListener('click', onPostSend);
+  $('suggestBtn').addEventListener('click', onSuggestCaptions);
   // Any edit invalidates a passed preview — force a fresh one.
   ['postCaption', 'pfFb', 'pfIg'].forEach((id) => $(id).addEventListener('input', () => setPostStage('compose')));
+}
+
+// ── Caption suggestions — Claude writes options from the flyer's own fields ──
+async function onSuggestCaptions() {
+  if (!state.lastTemplateKey) return toast('Compose a flyer first — captions are written from its fields.', 'err');
+  const btn = $('suggestBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin dark"></span>Writing…';
+  try {
+    const r = await (await fetch(`${API}/suggest-captions`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templateKey: state.lastTemplateKey, content: state.lastContent || {} }) })).json();
+    if (!r.ok) throw new Error(r.error || 'suggestion failed');
+    $('suggestSource').textContent = r.source === 'ai' ? '· AI-written — tap one, then edit' : '· from the flyer — tap one, then edit';
+    const host = $('captionIdeas'); host.innerHTML = ''; host.classList.remove('hidden');
+    r.captions.forEach((c) => {
+      const card = el('button', 'caption-idea'); card.type = 'button'; card.textContent = c;
+      card.addEventListener('click', () => { $('postCaption').value = c; setPostStage('compose'); });
+      host.appendChild(card);
+    });
+  } catch (e) { toast('Captions failed: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = '✨ Suggest captions'; }
 }
 function setPostStage(stage) {
   post.stage = stage;
@@ -508,6 +531,11 @@ function openPostDialog(img) {
   $('postImg').src = `data:image/png;base64,${img.base64}`;
   $('postMeta').textContent = `${img.label} · ${img.width}×${img.height}`;
   $('postCaption').value = '';
+  $('captionIdeas').classList.add('hidden'); $('captionIdeas').innerHTML = '';
+  $('suggestSource').textContent = '';
+  // Suggestions are written from the composed flyer's fields — hide the button
+  // for Advanced-path masters where no template content exists.
+  $('suggestBtn').style.display = state.lastTemplateKey ? '' : 'none';
   setPostStage('compose');
   $('postDialog').showModal();
 }

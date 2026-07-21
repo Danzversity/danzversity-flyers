@@ -240,6 +240,14 @@ dialog textarea {
 }
 dialog textarea:focus { outline: none; border-color: var(--gold); }
 .post-platforms { display: flex; gap: 18px; margin: 6px 0 4px; }
+.caption-suggest { display: flex; align-items: center; gap: 10px; margin: 8px 0 4px; font-size: 12px; }
+.caption-ideas { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 4px; max-height: 220px; overflow-y: auto; }
+.caption-idea {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+  color: var(--text); font-size: 12.5px; line-height: 1.45; padding: 9px 11px;
+  text-align: left; white-space: pre-wrap; cursor: pointer; font-weight: 400;
+}
+.caption-idea:hover { border-color: var(--gold); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 
 /* Pickers (background / people) */
