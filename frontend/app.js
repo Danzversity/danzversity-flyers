@@ -38,6 +38,7 @@ function init() {
   $('dlMeta').addEventListener('click', () => downloadBundle('meta', ['4x5', '1x1', '9x16']));
   $('dlPmax').addEventListener('click', () => downloadBundle('pmax', ['4x5', '1x1', '9x16', '1.91x1']));
   $('saveDrive').addEventListener('click', onSaveDrive);
+  $('smartPostBtn').addEventListener('click', onSmartPost);
   initPostDialog();
   checkHealth();
   initCreate();
@@ -479,6 +480,20 @@ function setTab(tab) {
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
   renderGrid();
 }
+// Where each size can actually go on Meta. Instagram feed rejects/butchers
+// wide ratios and 9:16 belongs in Stories — the Post button routes each size
+// to its legal placement instead of offering IG everywhere.
+const PLACEMENTS = {
+  '4x5':       { platforms: ['facebook', 'instagram'], placement: 'feed',  useCaption: true,  btn: '📣 Post',    desc: 'Instagram + Facebook feed' },
+  '1x1':       { platforms: ['facebook', 'instagram'], placement: 'feed',  useCaption: true,  btn: '📣 Post',    desc: 'Instagram + Facebook feed' },
+  '9x16':      { platforms: ['facebook', 'instagram'], placement: 'story', useCaption: false, btn: '📣 Story',   desc: 'Instagram + Facebook STORY — stories don’t carry captions' },
+  '16x9':      { platforms: ['facebook'],              placement: 'feed',  useCaption: true,  btn: '📣 FB only', desc: 'Facebook feed only — too wide for Instagram' },
+  '4x3':       { platforms: ['facebook'],              placement: 'feed',  useCaption: true,  btn: '📣 FB only', desc: 'Facebook feed only' },
+  'site-card': { platforms: ['facebook'],              placement: 'feed',  useCaption: true,  btn: '📣 FB only', desc: 'Facebook feed only — website asset' },
+  '1.91x1':    { platforms: ['facebook'],              placement: 'feed',  useCaption: true,  btn: '📣 FB only', desc: 'Facebook feed only — ad size' },
+  // '2x1' email banner: an email asset, not a social one — no Post button.
+};
+
 function renderGrid() {
   const grid = $('grid'); grid.innerHTML = ''; const tpl = $('tileTpl').content;
   state.images.map((img, idx) => ({ img, idx })).filter(({ img }) => img.channel === state.activeTab).forEach(({ img, idx }) => {
@@ -487,15 +502,36 @@ function renderGrid() {
     node.querySelector('.tile-label').textContent = `${img.label} · ${img.family}`;
     node.querySelector('.tile-dims').textContent = `${img.width}×${img.height}`;
     node.querySelector('.dl-one').addEventListener('click', () => downloadOne(img));
-    node.querySelector('.post-one').addEventListener('click', () => openPostDialog(img));
+    const pl = PLACEMENTS[img.sizeKey];
+    const postBtn = node.querySelector('.post-one');
+    if (!pl) {
+      postBtn.style.display = 'none'; // email banner etc.
+    } else {
+      postBtn.textContent = pl.btn; postBtn.title = pl.desc;
+      postBtn.addEventListener('click', () => openPostDialog([{ img, ...pl }]));
+    }
     grid.appendChild(node);
   });
+}
+
+// One click, right placements: best feed size → IG+FB feed, 9:16 → Stories.
+function onSmartPost() {
+  const pick = (key) => state.images.find((i) => i.sizeKey === key && i.channel === 'organic') || state.images.find((i) => i.sizeKey === key);
+  const feed = pick('4x5') || pick('1x1');
+  const story = pick('9x16');
+  const entries = [];
+  if (feed) entries.push({ img: feed, ...PLACEMENTS[feed.sizeKey], desc: `Feed post (${feed.label}) — Instagram + Facebook` });
+  if (story) entries.push({ img: story, ...PLACEMENTS['9x16'], desc: `Story (${story.label}) — Instagram + Facebook` });
+  if (!entries.length) return toast('No postable sizes in this set.', 'err');
+  openPostDialog(entries);
 }
 
 // ── Social (danzversity-social rail: preview → confirm → send) ──────────────
 // One dialog, two clicks: "Preview →" validates with the rail, then the same
 // button becomes "Post now" so nothing publishes on a single click.
-const post = { img: null, stage: 'compose' };
+// post.plan is a list of {img, platforms, placement, useCaption, desc} —
+// one entry for a tile's Post button, several for "Publish everywhere".
+const post = { plan: [], stage: 'compose' };
 function initPostDialog() {
   $('postCancel').addEventListener('click', () => $('postDialog').close());
   $('postSend').addEventListener('click', onPostSend);
@@ -526,34 +562,66 @@ function setPostStage(stage) {
   post.stage = stage;
   $('postSend').textContent = stage === 'confirm' ? '✓ Preview OK — Post now' : 'Preview →';
 }
-function openPostDialog(img) {
-  post.img = img;
-  $('postImg').src = `data:image/png;base64,${img.base64}`;
-  $('postMeta').textContent = `${img.label} · ${img.width}×${img.height}`;
+function openPostDialog(plan) {
+  post.plan = plan;
+  const first = plan[0];
+  $('postImg').src = `data:image/png;base64,${first.img.base64}`;
+  $('postMeta').textContent = plan.length === 1
+    ? `${first.img.label} · ${first.img.width}×${first.img.height}`
+    : `${plan.length} placements, one click`;
+
+  // The plan list — say exactly where each image is going.
+  const planHost = $('postPlan'); planHost.innerHTML = '';
+  planHost.classList.toggle('hidden', plan.length === 1 && first.placement === 'feed' && first.platforms.length === 2);
+  plan.forEach((e) => planHost.appendChild(el('div', 'post-plan-line', `→ ${e.desc}`)));
+
+  // Platform checkboxes: only meaningful for a single feed entry — the plan
+  // dictates platforms everywhere else.
+  const showChecks = plan.length === 1 && first.placement === 'feed';
+  $('pfFb').closest('.post-platforms').style.display = showChecks ? '' : 'none';
+  if (showChecks) {
+    $('pfFb').checked = first.platforms.includes('facebook'); $('pfFb').disabled = !first.platforms.includes('facebook');
+    $('pfIg').checked = first.platforms.includes('instagram'); $('pfIg').disabled = !first.platforms.includes('instagram');
+  }
+
+  // Caption: disabled when nothing in the plan carries one (story-only).
+  const anyCaption = plan.some((e) => e.useCaption);
   $('postCaption').value = '';
+  $('postCaption').disabled = !anyCaption;
+  $('postCaption').placeholder = anyCaption ? 'Write the caption…' : 'Stories don’t carry captions';
   $('captionIdeas').classList.add('hidden'); $('captionIdeas').innerHTML = '';
   $('suggestSource').textContent = '';
   // Suggestions are written from the composed flyer's fields — hide the button
   // for Advanced-path masters where no template content exists.
-  $('suggestBtn').style.display = state.lastTemplateKey ? '' : 'none';
+  $('suggestBtn').style.display = (anyCaption && state.lastTemplateKey) ? '' : 'none';
+
   setPostStage('compose');
   $('postDialog').showModal();
 }
 async function onPostSend() {
-  const img = post.img; if (!img) return;
+  if (!post.plan.length) return;
   const caption = $('postCaption').value.trim();
-  const platforms = [];
-  if ($('pfFb').checked) platforms.push('facebook');
-  if ($('pfIg').checked) platforms.push('instagram');
-  if (!platforms.length) return toast('Pick at least one platform.', 'err');
+  const entries = post.plan.map((e) => ({ ...e }));
+  // A single feed entry honors the checkboxes (within its legal platforms).
+  if (entries.length === 1 && entries[0].placement === 'feed') {
+    const pf = [];
+    if ($('pfFb').checked) pf.push('facebook');
+    if ($('pfIg').checked && entries[0].platforms.includes('instagram')) pf.push('instagram');
+    if (!pf.length) return toast('Pick at least one platform.', 'err');
+    entries[0].platforms = pf;
+  }
   const mode = post.stage === 'confirm' ? 'send' : 'preview';
   const btn = $('postSend'); btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${mode === 'send' ? 'Posting…' : 'Checking…'}`;
   try {
-    const r = await (await fetch(`${API}/post-social`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ base64: img.base64, caption, platforms, mode }) })).json();
-    if (!r.ok) throw new Error(r.error || `${mode} failed`);
+    const done = [];
+    for (const e of entries) {
+      const r = await (await fetch(`${API}/post-social`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64: e.img.base64, caption: e.useCaption ? caption : '', platforms: e.platforms, placement: e.placement, mode }) })).json();
+      if (!r.ok) throw new Error(`${e.desc}: ${r.error || mode + ' failed'}`);
+      done.push(e.desc);
+    }
     if (mode === 'preview') { setPostStage('confirm'); }
-    else { $('postDialog').close(); setPostStage('compose'); toast('Posted to ' + platforms.join(' + ') + ' 🎉', 'ok'); }
+    else { $('postDialog').close(); setPostStage('compose'); toast('Posted 🎉 ' + done.join(' · '), 'ok'); }
   } catch (e) { toast('Social post failed: ' + e.message, 'err'); setPostStage('compose'); }
   finally { btn.disabled = false; }
 }

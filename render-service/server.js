@@ -59,7 +59,7 @@ const captions = require('./integrations/captions');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.3.0'; // 1.3.0: caption suggestions — Claude-written (ANTHROPIC_API_KEY) with deterministic template fallback
+const VERSION = '1.3.1'; // 1.3.1: smart placements — per-size routing (feed/story/FB-only), Publish-everywhere plan, rail calls over node:https
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -177,13 +177,13 @@ app.get('/pub/:token.jpg', (req, res) => {
 // preview → the rail composes but does NOT post; send → posts to FB/IG.
 app.post('/post-social', async (req, res) => {
   try {
-    const { base64, caption = '', platforms, mode = 'preview', link } = req.body || {};
+    const { base64, caption = '', platforms, placement = 'feed', mode = 'preview', link } = req.body || {};
     if (!base64) return res.status(400).json({ ok: false, error: 'base64 image required' });
     if (!social.isConfigured()) return res.status(503).json({ ok: false, error: 'SOCIAL_RAIL_KEY not set on the server (Render env).' });
     // Meta wants JPEG — transcode whatever family/size PNG comes in.
     const jpeg = await sharp(Buffer.from(base64, 'base64')).jpeg({ quality: 92 }).toBuffer();
-    const result = await social.post({ imageBuffer: jpeg, caption, platforms, mode, link });
-    res.json({ ok: true, mode, result });
+    const result = await social.post({ imageBuffer: jpeg, caption, platforms, placement, mode, link });
+    res.json({ ok: true, mode, placement, result });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

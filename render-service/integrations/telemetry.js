@@ -11,13 +11,13 @@
 const RAIL_URL = process.env.CHECKOUT_RAIL_URL || 'https://danzversity-checkout.tony-1f5.workers.dev/admin/flyer-spend';
 const RAIL_KEY = process.env.CHECKOUT_RAIL_KEY || '';
 
+// node:https via httpz — undici/fetch is broken on Render (standing rule);
+// as a fire-and-forget this would have failed silently forever.
+const { postJson } = require('./httpz');
 function reportSpend(service, count = 1) {
   if (!RAIL_KEY || !count) return;
-  fetch(`${RAIL_URL}?key=${encodeURIComponent(RAIL_KEY)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ service, count }),
-  }).catch((e) => console.warn('[telemetry] spend report failed (non-fatal):', e && e.message));
+  postJson(`${RAIL_URL}?key=${encodeURIComponent(RAIL_KEY)}`, { service, count })
+    .catch((e) => console.warn('[telemetry] spend report failed (non-fatal):', e && e.message));
 }
 
 module.exports = { reportSpend };

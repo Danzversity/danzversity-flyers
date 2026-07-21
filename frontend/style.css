@@ -240,6 +240,8 @@ dialog textarea {
 }
 dialog textarea:focus { outline: none; border-color: var(--gold); }
 .post-platforms { display: flex; gap: 18px; margin: 6px 0 4px; }
+.post-plan { display: flex; flex-direction: column; gap: 4px; margin: 0 0 12px; }
+.post-plan-line { font-size: 12.5px; color: var(--gold); font-weight: 600; }
 .caption-suggest { display: flex; align-items: center; gap: 10px; margin: 8px 0 4px; font-size: 12px; }
 .caption-ideas { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 4px; max-height: 220px; overflow-y: auto; }
 .caption-idea {

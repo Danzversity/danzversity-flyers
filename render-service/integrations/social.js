@@ -38,16 +38,15 @@ function getPublic(token) {
 }
 
 // Post via the rail. mode 'preview' returns the composed post without sending.
-async function post({ imageBuffer, caption = '', platforms = ['facebook', 'instagram'], mode = 'preview', link }) {
+// placement: 'feed' (default) or 'story' (rail v2 routes to IG Stories + FB
+// Page photo stories; stories carry no caption).
+// node:https via httpz — undici/fetch is broken on Render (standing rule).
+const { postJson } = require('./httpz');
+async function post({ imageBuffer, caption = '', platforms = ['facebook', 'instagram'], placement = 'feed', mode = 'preview', link }) {
   if (!RAIL_KEY) throw new Error('SOCIAL_RAIL_KEY not set on this server — add it in the Render dashboard env.');
   const { url } = registerPublic(imageBuffer);
-  const res = await fetch(RAIL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key: RAIL_KEY, mode, platforms, text: caption, imageUrl: url, link }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`social rail ${res.status}: ${JSON.stringify(data).slice(0, 300)}`);
+  const { status, json: data } = await postJson(RAIL_URL, { key: RAIL_KEY, mode, platforms, placement, text: caption, imageUrl: url, link }, { timeout: 30000 });
+  if (status < 200 || status >= 300) throw new Error(`social rail ${status}: ${JSON.stringify(data).slice(0, 300)}`);
   return { ...data, publicImageUrl: url };
 }
 
