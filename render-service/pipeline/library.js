@@ -27,13 +27,13 @@ function driveBacked(kind) {
 // The _video pool self-provisions: no VIDEO_FOLDER_ID needed — with Drive
 // configured, FLYERS/_video is found-or-created via the SA on first use and
 // cached for the process. (BG/PEOPLE keep their baked env IDs.)
-let _videoFolderPromise = null;
+let _videoFolderPromise = null, _videoError = null;
 async function ensureVideoFolder() {
   if (FOLDER.video || !gdrive.isConfigured()) return FOLDER.video;
   if (!_videoFolderPromise) {
     _videoFolderPromise = gdrive.resolvePath(['FLYERS', '_video'])
-      .then((id) => { FOLDER.video = id; return id; })
-      .catch((e) => { _videoFolderPromise = null; throw e; });
+      .then((id) => { FOLDER.video = id; _videoError = null; return id; })
+      .catch((e) => { _videoError = e.message; _videoFolderPromise = null; throw e; });
   }
   return _videoFolderPromise;
 }
@@ -79,6 +79,9 @@ function status() {
     backgrounds: driveBacked('backgrounds') ? 'drive' : 'local',
     people: driveBacked('people') ? 'drive' : 'local',
     video: driveBacked('video') ? 'drive' : 'local',
+    // Surfaced (not swallowed) so a failed FLYERS/_video self-provision is
+    // visible in /videos and /health instead of masquerading as "local by design".
+    videoError: _videoError,
   };
 }
 

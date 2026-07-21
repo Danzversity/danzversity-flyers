@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.4.2'; // 1.4.2: ffmpeg via @ffmpeg-installer (binary in the npm tarball — ffmpeg-static's GitHub download broke the Render build)
+const VERSION = '1.4.3'; // 1.4.3: surface the FLYERS/_video self-provision error (was silently falling back to local)
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -546,8 +546,13 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 
 app.get('/videos', async (req, res) => {
-  try { res.json({ ok: true, source: library.status().video, items: await library.list('video') }); }
-  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  try {
+    // list() first — it lazily self-provisions FLYERS/_video, and status()
+    // must reflect the post-provision state (and any provision error).
+    const items = await library.list('video');
+    const st = library.status();
+    res.json({ ok: true, source: st.video, videoError: st.videoError || null, items });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 app.post('/upload-video', videoUpload.single('file'), async (req, res) => {
