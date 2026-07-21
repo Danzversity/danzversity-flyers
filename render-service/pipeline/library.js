@@ -24,8 +24,23 @@ function driveBacked(kind) {
   return gdrive.isConfigured() && !!FOLDER[kind];
 }
 
+// The _video pool self-provisions: no VIDEO_FOLDER_ID needed — with Drive
+// configured, FLYERS/_video is found-or-created via the SA on first use and
+// cached for the process. (BG/PEOPLE keep their baked env IDs.)
+let _videoFolderPromise = null;
+async function ensureVideoFolder() {
+  if (FOLDER.video || !gdrive.isConfigured()) return FOLDER.video;
+  if (!_videoFolderPromise) {
+    _videoFolderPromise = gdrive.resolvePath(['FLYERS', '_video'])
+      .then((id) => { FOLDER.video = id; return id; })
+      .catch((e) => { _videoFolderPromise = null; throw e; });
+  }
+  return _videoFolderPromise;
+}
+
 /** List a library: [{id, name, source, thumb}]. */
 async function list(kind) {
+  if (kind === 'video') await ensureVideoFolder().catch(() => null); // fall back local on failure
   if (driveBacked(kind)) {
     const files = await (kind === 'video' ? gdrive.listVideos(FOLDER[kind]) : gdrive.listImages(FOLDER[kind]));
     return files.map((f) => ({ id: f.id, name: f.name, source: 'drive', thumb: f.thumbnailLink || null, bytes: f.size ? Number(f.size) : null }));
@@ -48,6 +63,7 @@ async function get(kind, id) {
 
 /** Add an asset to a library; returns {id, name, source}. */
 async function upload(kind, name, buffer, mimeType = 'image/png') {
+  if (kind === 'video') await ensureVideoFolder().catch(() => null);
   if (driveBacked(kind)) {
     const f = await gdrive.uploadImage(FOLDER[kind], name, buffer, mimeType);
     return { id: f.id, name, source: 'drive' };

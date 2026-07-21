@@ -196,4 +196,4 @@ async function getAacmeLogo() {
   return _aacmeLogo;
 }
 
-module.exports = { isConfigured, saveImages, listImages, listVideos, downloadFile, uploadImage, getAacmeLogo };
+module.exports = { isConfigured, saveImages, listImages, listVideos, downloadFile, uploadImage, resolvePath, getAacmeLogo };
