@@ -170,6 +170,44 @@ const SMART_CROP_BOTTOM_SAFE = 0.28;
 const SMART_CROP_TOP_SAFE    = 0.10; // small logo sits at top
 
 // ---------------------------------------------------------------------------
+// VIDEO (Video Output Standard v1) — the short-form clip pipeline's tokens.
+// Same philosophy as flyers: the brand layer is code-locked and deterministic;
+// only the footage varies. Anatomy per the current short-form standard:
+// cold-open hook (NO title slide — first ~1.3s decides the scroll) + burned-in
+// hook text (first 3s) + subtle corner watermark + a 1.4s code-rendered brand
+// end-card. Every output must pass the ffprobe gate below before it ships.
+// ---------------------------------------------------------------------------
+const videoSizes = {
+  '9x16': { key: '9x16', label: '9:16 vertical', w: 1080, h: 1920, useCase: 'TikTok, Reels, YouTube Shorts, Stories' },
+  '1x1':  { key: '1x1',  label: '1:1 square',    w: 1080, h: 1080, useCase: 'IG/FB feed video' },
+  '16x9': { key: '16x9', label: '16:9 wide',     w: 1920, h: 1080, useCase: 'YouTube standard, FB feed' },
+};
+
+// Machine-enforced gate values + by-construction encode settings. If an output
+// fails ANY gate check the compose FAILS LOUDLY — same doctrine as the flyer
+// OCR gate: the machine checks what tired eyes miss.
+const videoStandard = {
+  fps: 30,
+  vcodec: 'h264',            // H.264 High — universal ingest on TikTok/YT/Meta
+  pixFmt: 'yuv420p',
+  crf: 20,
+  acodec: 'aac',
+  audioRate: 48000,
+  audioBitrate: '128k',
+  loudnormI: -14,            // -14 LUFS — platform normalization target
+  minSeconds: 3,             // shorter than this is a misfire, not a post
+  maxSeconds: 90,            // hard cap (Shorts ≤ 60s stays eligible via UI default)
+  defaultClipSeconds: 30,
+  hookSeconds: 3.0,          // burned-in hook text shows for the first 3s
+  endCardSeconds: 1.4,       // code-rendered brand end-card
+  watermarkWidthFrac: 0.14,  // logo watermark width as a fraction of frame W
+  watermarkOpacity: 0.55,
+  // Safe zones (9:16): keep critical text out of TikTok's UI — right-side icon
+  // rail (~ right 15%), bottom caption zone (~ bottom 18%), top bar (~ top 8%).
+  safeZones: { top: 0.08, bottom: 0.18, right: 0.15 },
+};
+
+// ---------------------------------------------------------------------------
 // Upload-ready bundles (v11) — both pull from the Style A-Lite paid family.
 //   Meta paid placements: 4:5 + 1:1 + 9:16
 //   Google PMax: square + portrait + landscape (we ship 4:5/1:1/9:16/1.91:1)
@@ -194,6 +232,7 @@ const brandRef = {
 // ---------------------------------------------------------------------------
 const DRIVE_ROOT = 'FLYERS';
 function driveBucket(channel) {
+  if (channel === 'video') return 'Video';
   return channel === 'paid' ? 'Paid' : 'Organic';
 }
 function drivePathSegments(template, yyyymm, channel) {
@@ -239,6 +278,8 @@ module.exports = {
   SMART_CROP_BOTTOM_SAFE,
   SMART_CROP_TOP_SAFE,
   bundles,
+  videoSizes,
+  videoStandard,
   brandRef,
   DRIVE_ROOT,
   driveBucket,

@@ -14,7 +14,9 @@
 // The frontend (served at /) does client-side zipping for instant downloads; the
 // bundle endpoints exist for headless/API/cron use.
 
-require('dotenv').config();
+// Anchored to the repo (not process.cwd()) so the server behaves identically
+// no matter which directory it's launched from.
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 // Force IPv4-first DNS. Node 22 + gaxios/undici default to IPv6, which resets the
 // connection to googleapis.com mid-response ("Premature close") on hosts like
 // Render — breaking the service-account token mint. IPv4-first fixes it.
@@ -38,6 +40,7 @@ const ideogram = require('./integrations/ideogram');
 const removebg = require('./integrations/removebg');
 const social = require('./integrations/social');
 const captions = require('./integrations/captions');
+const video = require('./pipeline/video');
 
 // Install the bundled fonts where fontconfig looks. Render's librsvg IGNORES the
 // @font-face data-URIs embedded in the chassis SVG and resolves fonts through
@@ -59,7 +62,7 @@ const captions = require('./integrations/captions');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.3.2'; // 1.3.2: honest partial-send reporting (per-platform ✓/✗); rail v3 waits for IG container processing
+const VERSION = '1.4.0'; // 1.4.0: VIDEO — cut clips to the Video Output Standard (hook + watermark + brand end-card + ffprobe gate)
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -142,7 +145,7 @@ function imagePayload(d, includeBase64 = true) {
 }
 
 // ── Routes ───────────────────────────────────────────────────────────────────
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
   res.json({
     status: 'ok',
     service: 'danzversity-flyer-pipeline',
@@ -154,6 +157,8 @@ app.get('/health', (req, res) => {
     removebgConfigured: removebg.isConfigured(),
     socialConfigured: social.isConfigured(),
     captionsAI: captions.isConfigured(),
+    videoConfigured: video.isConfigured(),
+    videoReady: await video.selfTest(), // ffmpeg/ffprobe actually execute (catches truncated postinstall)
     spendTelemetry: !!process.env.CHECKOUT_RAIL_KEY,
     library: library.status(),
     templateCount: templates.TEMPLATES.length,
@@ -514,6 +519,121 @@ app.post('/generate-backgrounds', async (req, res) => {
     });
   } catch (e) {
     console.error('/generate-backgrounds error:', e.stack || e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── VIDEO (Video Output Standard v1) ─────────────────────────────────────────
+// Cut a source clip → hook + watermark + brand end-card → gated platform
+// outputs. Videos are far too big for memory buffers / base64 JSON, so:
+//   • uploads go through a DISK-storage multer (tmp),
+//   • outputs are served back by unguessable token URL (same-origin, behind
+//     the basic-auth gate — unlike /pub these are never public),
+//   • "Save to Drive" re-reads the tmp files server-side (no bytes round-trip).
+const videoUpload = multer({
+  storage: multer.diskStorage({ destination: require('os').tmpdir() }),
+  limits: { fileSize: 500 * 1024 * 1024, files: 1 },
+});
+const _videoOut = new Map(); // token → {path, workDir, expires}
+setInterval(() => {
+  const now = Date.now();
+  for (const [tok, e] of _videoOut) {
+    if (e.expires < now) {
+      _videoOut.delete(tok);
+      try { require('fs').rmSync(e.workDir, { recursive: true, force: true }); } catch (_) { /* already gone */ }
+    }
+  }
+}, 10 * 60 * 1000).unref();
+
+app.get('/videos', async (req, res) => {
+  try { res.json({ ok: true, source: library.status().video, items: await library.list('video') }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/upload-video', videoUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'file required' });
+    const buf = require('fs').readFileSync(req.file.path);
+    const saved = await library.upload('video', req.file.originalname || `clip-${Date.now()}.mp4`, buf, req.file.mimetype || 'video/mp4');
+    require('fs').unlinkSync(req.file.path);
+    res.json({ ok: true, ...saved });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.get('/video-out/:token.mp4', (req, res) => {
+  const entry = _videoOut.get(req.params.token);
+  if (!entry || !require('fs').existsSync(entry.path)) return res.status(404).send('gone');
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.sendFile(entry.path);
+});
+
+// Cut a clip. multipart: video file OR sourceId (library), + start, seconds,
+// aspects (csv of 9x16/1x1/16x9), hook, end (JSON: headline/subhead/cta/url/qr),
+// slug. Every output must pass the ffprobe gate or the whole call fails.
+app.post('/video-compose', videoUpload.single('video'), async (req, res) => {
+  const t0 = Date.now();
+  const fsx = require('fs');
+  let srcPath = null, srcIsTemp = false;
+  try {
+    if (req.file) { srcPath = req.file.path; srcIsTemp = true; }
+    else if (req.body.sourceId) {
+      const buf = await library.get('video', req.body.sourceId);
+      srcPath = path.join(require('os').tmpdir(), `dvz-src-${Date.now()}.mp4`);
+      fsx.writeFileSync(srcPath, buf); srcIsTemp = true;
+    } else return res.status(400).json({ ok: false, error: 'Upload a video or pick one from the library.' });
+
+    let endSpec = {};
+    if (req.body.end) { try { endSpec = JSON.parse(req.body.end); } catch (_) { return res.status(400).json({ ok: false, error: 'end must be JSON' }); } }
+
+    const slug = slugify(req.body.slug || endSpec.headline || 'clip');
+    const { outputs, source, workDir } = await video.composeVideo({
+      srcPath,
+      start: req.body.start,
+      seconds: req.body.seconds,
+      aspects: String(req.body.aspects || '9x16').split(',').map((s) => s.trim()).filter(Boolean),
+      hook: (req.body.hook || '').trim() || null,
+      endSpec,
+      slug,
+    });
+
+    const results = outputs.map((o) => {
+      const token = require('crypto').randomBytes(24).toString('hex');
+      _videoOut.set(token, { path: o.path, workDir, expires: Date.now() + 60 * 60 * 1000 });
+      return {
+        sizeKey: o.sizeKey, label: o.label, filename: o.filename, width: o.width, height: o.height,
+        seconds: Math.round(o.seconds * 10) / 10, bytes: o.bytes, token, url: `/video-out/${token}.mp4`,
+        gate: { ok: o.gate.ok, checks: o.gate.checks, byConstruction: o.gate.byConstruction },
+      };
+    });
+    res.json({ ok: true, slug, version: VERSION, source, driveConfigured: gdrive.isConfigured(), renderMs: Date.now() - t0, outputs: results });
+  } catch (e) {
+    console.error('/video-compose error:', e.stack || e.message);
+    res.status(e.status || 500).json({ ok: false, error: e.message });
+  } finally {
+    if (srcIsTemp && srcPath) { try { fsx.unlinkSync(srcPath); } catch (_) { /* gone */ } }
+  }
+});
+
+// Save finished cuts to Drive: FLYERS/{template}/{YYYY-MM}/Video/ — server-side
+// from the token store, so 30MB files never round-trip through the browser.
+app.post('/save-videos-to-drive', async (req, res) => {
+  try {
+    if (!gdrive.isConfigured()) return res.status(503).json({ ok: false, error: 'Drive not configured (GOOGLE_SERVICE_ACCOUNT missing).' });
+    const { template, month, tokens } = req.body || {};
+    if (!template || !month) return res.status(400).json({ ok: false, error: 'template and month (YYYY-MM) are required.' });
+    if (!Array.isArray(tokens) || !tokens.length) return res.status(400).json({ ok: false, error: 'tokens[] is required.' });
+    const fsx = require('fs');
+    const decoded = [];
+    for (const t of tokens) {
+      const entry = _videoOut.get(t);
+      if (!entry || !fsx.existsSync(entry.path)) return res.status(410).json({ ok: false, error: 'An output expired — compose again, then save.' });
+      decoded.push({ filename: path.basename(entry.path), channel: 'video', mimeType: 'video/mp4', buffer: fsx.readFileSync(entry.path) });
+    }
+    const t0 = Date.now();
+    const { results, savedCount } = await gdrive.saveImages(template, month, decoded);
+    res.json({ ok: true, savedCount, saveMs: Date.now() - t0, results });
+  } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
 });

@@ -10,12 +10,15 @@ const fs = require('fs');
 const path = require('path');
 const gdrive = require('../integrations/gdrive');
 
-const FOLDER = { backgrounds: process.env.BG_FOLDER_ID, people: process.env.PEOPLE_FOLDER_ID };
+const FOLDER = { backgrounds: process.env.BG_FOLDER_ID, people: process.env.PEOPLE_FOLDER_ID, video: process.env.VIDEO_FOLDER_ID };
 const LOCAL = {
   backgrounds: path.join(__dirname, '..', '..', 'library', 'backgrounds'),
   people: path.join(__dirname, '..', '..', 'library', 'people'),
+  video: path.join(__dirname, '..', '..', 'library', 'video'),
 };
 const IMG_RE = /\.(png|jpe?g|webp)$/i;
+const VID_RE = /\.(mp4|mov|m4v|webm)$/i;
+const EXT_RE = { backgrounds: IMG_RE, people: IMG_RE, video: VID_RE };
 
 function driveBacked(kind) {
   return gdrive.isConfigured() && !!FOLDER[kind];
@@ -24,12 +27,13 @@ function driveBacked(kind) {
 /** List a library: [{id, name, source, thumb}]. */
 async function list(kind) {
   if (driveBacked(kind)) {
-    const files = await gdrive.listImages(FOLDER[kind]);
-    return files.map((f) => ({ id: f.id, name: f.name, source: 'drive', thumb: f.thumbnailLink || null }));
+    const files = await (kind === 'video' ? gdrive.listVideos(FOLDER[kind]) : gdrive.listImages(FOLDER[kind]));
+    return files.map((f) => ({ id: f.id, name: f.name, source: 'drive', thumb: f.thumbnailLink || null, bytes: f.size ? Number(f.size) : null }));
   }
   const dir = LOCAL[kind];
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter((n) => IMG_RE.test(n)).map((n) => ({ id: `local:${kind}:${n}`, name: n, source: 'local', thumb: null }));
+  return fs.readdirSync(dir).filter((n) => (EXT_RE[kind] || IMG_RE).test(n))
+    .map((n) => ({ id: `local:${kind}:${n}`, name: n, source: 'local', thumb: null, bytes: fs.statSync(path.join(dir, n)).size }));
 }
 
 /** Fetch one asset's bytes by id (Drive file id, or local:kind:name). */
@@ -58,6 +62,7 @@ function status() {
   return {
     backgrounds: driveBacked('backgrounds') ? 'drive' : 'local',
     people: driveBacked('people') ? 'drive' : 'local',
+    video: driveBacked('video') ? 'drive' : 'local',
   };
 }
 

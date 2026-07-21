@@ -85,10 +85,10 @@ function qs(params) {
   return Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
 }
 
-async function listImages(folderId) {
+async function listByMime(folderId, mimePrefix) {
   const url = `${API}/files?` + qs({
-    q: `'${folderId}' in parents and mimeType contains 'image/' and trashed=false`,
-    fields: 'files(id,name,mimeType,thumbnailLink,modifiedTime)',
+    q: `'${folderId}' in parents and mimeType contains '${mimePrefix}' and trashed=false`,
+    fields: 'files(id,name,mimeType,thumbnailLink,modifiedTime,size)',
     orderBy: 'modifiedTime desc',
     pageSize: 100,
     supportsAllDrives: true,
@@ -98,6 +98,8 @@ async function listImages(folderId) {
   if (res.status !== 200) throw new Error(`Drive list ${res.status}: ${res.buffer.toString().slice(0, 200)}`);
   return JSON.parse(res.buffer.toString()).files || [];
 }
+const listImages = (folderId) => listByMime(folderId, 'image/');
+const listVideos = (folderId) => listByMime(folderId, 'video/');
 
 async function downloadFile(fileId) {
   const url = `${API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`;
@@ -163,13 +165,13 @@ async function saveImages(template, yyyymm, images) {
   const folderCache = {};
   const results = [];
   for (const img of images) {
-    const channel = img.channel === 'paid' ? 'paid' : 'organic';
+    const channel = ['paid', 'video'].includes(img.channel) ? img.channel : 'organic';
     if (!folderCache[channel]) {
       const segs = brand.drivePathSegments(template, yyyymm, channel);
       folderCache[channel] = await resolvePath(segs);
     }
     try {
-      const f = await uploadImage(folderCache[channel], img.filename, img.buffer, 'image/png');
+      const f = await uploadImage(folderCache[channel], img.filename, img.buffer, img.mimeType || 'image/png');
       results.push({ filename: img.filename, success: true, fileId: f.id, webViewLink: f.webViewLink });
     } catch (e) {
       results.push({ filename: img.filename, success: false, error: e.message });
@@ -194,4 +196,4 @@ async function getAacmeLogo() {
   return _aacmeLogo;
 }
 
-module.exports = { isConfigured, saveImages, listImages, downloadFile, uploadImage, getAacmeLogo };
+module.exports = { isConfigured, saveImages, listImages, listVideos, downloadFile, uploadImage, getAacmeLogo };

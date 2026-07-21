@@ -22,6 +22,9 @@ const create = {
 };
 const LOOKS_KEY = 'dvzFlyerLooks';
 
+// Video mode state — footage library + last compose outputs (token URLs).
+const vid = { items: [], selectedId: null, outputs: [], maker: 'flyer' };
+
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 
@@ -42,6 +45,18 @@ function init() {
   initPostDialog();
   checkHealth();
   initCreate();
+  initVideo();
+}
+
+// ── Maker mode: "What are we making today?" — Flyer | Video ──────────────────
+const FLYER_PANELS = ['createPanel', 'resultsPanel', 'inputPanel'];
+const VIDEO_PANELS = ['videoPanel', 'videoResults'];
+function setMaker(m) {
+  vid.maker = m === 'video' ? 'video' : 'flyer';
+  document.querySelectorAll('#makerToggle .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.maker === vid.maker));
+  // Results panels only reappear if they hold results — never an empty shell.
+  FLYER_PANELS.forEach((id) => $(id).classList.toggle('hidden', vid.maker !== 'flyer' || (id === 'resultsPanel' && !state.images.length)));
+  VIDEO_PANELS.forEach((id) => $(id).classList.toggle('hidden', vid.maker !== 'video' || (id === 'videoResults' && !vid.outputs.length)));
 }
 
 async function checkHealth() {
@@ -688,6 +703,126 @@ function renderAdCopy(ad) {
   const host = $('adcopy'); host.classList.remove('hidden'); host.innerHTML = '<h3>Ad copy <span class="muted">— paste into Ads Manager</span></h3>';
   if (ad.meta) { host.appendChild(el('h4', null, 'Meta')); host.appendChild(copyBlock('Primary text', ad.meta.primaryText)); host.appendChild(copyBlock('Headline', ad.meta.headline)); host.appendChild(copyBlock('Description', ad.meta.description)); host.appendChild(el('div', 'kv', `<b>CTA:</b> ${ad.meta.cta} &nbsp;·&nbsp; <b>URL:</b> ${ad.meta.url}`)); }
   if (ad.pmax) { host.appendChild(el('h4', null, 'Google PMax')); host.appendChild(copyBlock('Short headlines', ad.pmax.shortHeadlines.join('\n'))); host.appendChild(copyBlock('Long headlines', ad.pmax.longHeadlines.join('\n'))); host.appendChild(copyBlock('Descriptions', ad.pmax.descriptions.join('\n'))); host.appendChild(copyBlock('Long description', ad.pmax.longDescription)); }
+}
+
+// ── 🎬 VIDEO MODE — cut clips to the Video Output Standard ───────────────────
+function initVideo() {
+  document.querySelectorAll('#makerToggle .seg-btn').forEach((b) => b.addEventListener('click', () => setMaker(b.dataset.maker)));
+  $('vMonth').value = $('month').value;
+  $('uploadVidBtn').addEventListener('click', () => $('vidInput').click());
+  $('vidInput').addEventListener('change', onUploadVid);
+  $('videoComposeBtn').addEventListener('click', onVideoCompose);
+  $('vSaveDrive').addEventListener('click', onVSaveDrive);
+  loadVideos();
+}
+
+async function loadVideos() {
+  try {
+    const j = await (await fetch(`${API}/videos`)).json();
+    vid.items = j.items || [];
+    $('vidSource').textContent = `(${j.source} · ${vid.items.length})`;
+    if (!vid.selectedId && vid.items[0]) vid.selectedId = vid.items[0].id;
+    renderVidPicker();
+  } catch (e) { $('vidPicker').textContent = 'video library unavailable'; }
+}
+
+function renderVidPicker() {
+  const host = $('vidPicker'); host.innerHTML = '';
+  if (!vid.items.length) { host.innerHTML = '<span class="muted">No footage yet — add a video to the library.</span>'; return; }
+  vid.items.forEach((v) => {
+    const d = el('div', 'thumb-item vid' + (vid.selectedId === v.id ? ' sel' : '')); d.title = v.name;
+    // Drive hands us a real video thumbnail; local dev gets a film tile.
+    d.innerHTML = (v.thumb ? `<img src="${v.thumb}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="vid-tile">🎬</span>') +
+      `<span class="vid-name">${v.name}</span>`;
+    d.addEventListener('click', () => { vid.selectedId = v.id; $('vidChosen').textContent = v.name + (v.bytes ? ` · ${(v.bytes / 1e6).toFixed(0)} MB` : ''); renderVidPicker(); });
+    host.appendChild(d);
+  });
+}
+
+async function onUploadVid() {
+  const f = $('vidInput').files[0]; if (!f) return;
+  const btn = $('uploadVidBtn'); btn.disabled = true; btn.innerHTML = `<span class="spin dark"></span>Uploading ${(f.size / 1e6).toFixed(0)} MB…`;
+  try {
+    const fd = new FormData(); fd.append('file', f);
+    const r = await (await fetch(`${API}/upload-video`, { method: 'POST', body: fd })).json();
+    if (!r.ok) throw new Error(r.error || 'upload failed');
+    vid.selectedId = r.id;
+    await loadVideos();
+    toast(`“${f.name}” added to the footage library.`, 'ok');
+  } catch (e) { toast('Video upload failed: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = '⬆ Add video to library'; $('vidInput').value = ''; }
+}
+
+function vAspects() {
+  const a = [];
+  if ($('va_916').checked) a.push('9x16');
+  if ($('va_11').checked) a.push('1x1');
+  if ($('va_169').checked) a.push('16x9');
+  return a;
+}
+
+async function onVideoCompose() {
+  if (!vid.selectedId) return toast('Pick footage from the library first.', 'err');
+  const headline = $('vHeadline').value.trim();
+  if (!headline) return toast('The end-card needs a headline.', 'err');
+  const aspects = vAspects();
+  if (!aspects.length) return toast('Pick at least one size.', 'err');
+
+  const end = { headline, subhead: $('vSubhead').value.trim(), cta: $('vCta').value.trim(), url: $('vUrl').value.trim() };
+  if ($('vQr').checked && end.url) end.qr = 'https://' + end.url.toLowerCase().replace(/^https?:\/\//, '');
+
+  const fd = new FormData();
+  fd.append('sourceId', vid.selectedId);
+  fd.append('start', $('vStart').value || '0');
+  fd.append('seconds', $('vSeconds').value || '30');
+  fd.append('aspects', aspects.join(','));
+  if ($('vHook').value.trim()) fd.append('hook', $('vHook').value.trim());
+  fd.append('end', JSON.stringify(end));
+  fd.append('slug', $('vTemplate').value.trim() || headline);
+
+  const btn = $('videoComposeBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Cutting… (up to a minute)';
+  try {
+    const data = await (await fetch(`${API}/video-compose`, { method: 'POST', body: fd })).json();
+    if (!data.ok) throw new Error(data.error || 'video compose failed');
+    vid.outputs = data.outputs; vid.slug = data.slug; vid.driveConfigured = data.driveConfigured;
+    renderVideoResults(data);
+    toast(`${data.outputs.length} cut${data.outputs.length > 1 ? 's' : ''} in ${(data.renderMs / 1000).toFixed(1)}s — every gate passed.`, 'ok');
+    $('videoResults').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Cut the clip →'; }
+}
+
+function renderVideoResults(data) {
+  $('videoResults').classList.remove('hidden');
+  const s = data.source;
+  $('vSummary').innerHTML = `<b>${data.slug}</b> · from ${s.start}s for ${s.seconds}s of a ${s.duration.toFixed(1)}s source · ${data.outputs.length} outputs · ${(data.renderMs / 1000).toFixed(1)}s`;
+  $('vSaveDrive').disabled = !data.driveConfigured;
+  const host = $('vGrid'); host.innerHTML = '';
+  data.outputs.forEach((o) => {
+    const card = el('div', 'vcard');
+    const gateLine = o.gate.ok
+      ? `<span class="gate ok">✓ Standard v1 — ${o.gate.checks.length} checks passed</span>`
+      : `<span class="gate bad">✗ gate failed</span>`;
+    card.innerHTML = `
+      <video controls playsinline preload="metadata" src="${o.url}"></video>
+      <div class="tile-meta"><span class="tile-label">${o.label}</span><span class="tile-dims muted">${o.width}×${o.height} · ${o.seconds}s · ${(o.bytes / 1e6).toFixed(1)} MB</span></div>
+      <div class="gate-row">${gateLine}</div>`;
+    const row = el('div', 'tile-row');
+    const dl = el('a', 'ghost sm dl-link', '⬇ MP4'); dl.href = o.url; dl.download = o.filename;
+    row.appendChild(dl); card.appendChild(row); host.appendChild(card);
+  });
+}
+
+async function onVSaveDrive() {
+  if (!vid.outputs.length) return;
+  const btn = $('vSaveDrive'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Saving…';
+  try {
+    const payload = { template: $('vTemplate').value.trim() || vid.slug || 'Video', month: $('vMonth').value, tokens: vid.outputs.map((o) => o.token) };
+    const data = await (await fetch(`${API}/save-videos-to-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })).json();
+    if (!data.ok) throw new Error(data.error);
+    toast(`Saved ${data.savedCount} to Drive · FLYERS/${payload.template}/${payload.month}/Video/`, 'ok');
+  } catch (e) { toast('Drive save failed: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = '☁ Save all to Drive'; }
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────

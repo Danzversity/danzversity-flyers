@@ -21,6 +21,15 @@
   </header>
 
   <main>
+    <!-- MAKER MODE -->
+    <section class="panel makerrow" id="makerPanel">
+      <h2 class="step maker-q">What are we making today?</h2>
+      <div class="seg maker-seg" id="makerToggle">
+        <button class="seg-btn active" type="button" data-maker="flyer">🖼 Flyer</button>
+        <button class="seg-btn" type="button" data-maker="video">🎬 Video</button>
+      </div>
+    </section>
+
     <!-- BUILD -->
     <section class="panel" id="createPanel">
       <h2 class="step">① Build the flyer</h2>
@@ -119,6 +128,85 @@
       </div>
 
       <div id="grid" class="grid"></div>
+    </section>
+
+    <!-- VIDEO: cut a clip to the Video Output Standard -->
+    <section class="panel hidden" id="videoPanel">
+      <h2 class="step">① Cut the clip</h2>
+      <p class="hint">Cold-open on your strongest moment — <b>no title slide</b> (the first second decides the scroll). The hook line carries the first 3 seconds; the brand end-card closes it.</p>
+
+      <div class="picker-block">
+        <div class="picker-head">
+          <span>Footage <span class="muted" id="vidSource"></span></span>
+          <button id="uploadVidBtn" class="ghost sm" type="button">⬆ Add video to library</button>
+          <input id="vidInput" type="file" accept="video/*" hidden />
+        </div>
+        <div id="vidPicker" class="thumbs vid-thumbs">loading…</div>
+        <div id="vidChosen" class="muted"></div>
+      </div>
+
+      <div class="grid3">
+        <label class="field">Start at (seconds)
+          <input id="vStart" type="number" min="0" step="0.5" value="0" />
+        </label>
+        <label class="field">Clip length (seconds) <span class="muted">≤60 keeps Shorts eligible</span>
+          <input id="vSeconds" type="number" min="3" max="90" value="30" />
+        </label>
+        <label class="field">Month <span class="muted">(Drive filing)</span>
+          <input id="vMonth" type="month" />
+        </label>
+      </div>
+
+      <label class="field">Hook line <span class="muted">— burned in for the first 3s, all-caps</span>
+        <input id="vHook" type="text" placeholder="POV: your first breakin class" autocomplete="off" />
+      </label>
+
+      <h3 class="substep">End-card <span class="muted">— the locked brand chassis, code-rendered every time</span></h3>
+      <div class="grid3">
+        <label class="field">Headline *
+          <input id="vHeadline" type="text" placeholder="ADULT HIP-HOP CLASSES" autocomplete="off" />
+        </label>
+        <label class="field">Subline
+          <input id="vSubhead" type="text" placeholder="All levels · 7531 Burnet Rd, Austin" autocomplete="off" />
+        </label>
+        <label class="field">CTA button
+          <input id="vCta" type="text" value="START YOUR TRIAL" autocomplete="off" />
+        </label>
+      </div>
+      <div class="grid3">
+        <label class="field">Link on the card
+          <input id="vUrl" type="text" value="DANZVERSITY.COM" autocomplete="off" />
+        </label>
+        <label class="field">Event name <span class="muted">(filenames &amp; Drive folder)</span>
+          <input id="vTemplate" type="text" placeholder="Fall Enrollment" autocomplete="off" />
+        </label>
+      </div>
+
+      <div class="moderow">
+        <span class="mode-label">Sizes</span>
+        <label class="chk"><input type="checkbox" id="va_916" checked /> <b>9:16</b> <span class="muted">TikTok · Reels · Shorts</span></label>
+        <label class="chk"><input type="checkbox" id="va_11" /> <b>1:1</b> <span class="muted">IG/FB feed</span></label>
+        <label class="chk"><input type="checkbox" id="va_169" /> <b>16:9</b> <span class="muted">YouTube</span></label>
+      </div>
+      <label class="chk"><input type="checkbox" id="vQr" /> QR on the end-card <span class="muted">— off by default; a 1.4s card is a pause-to-scan, the link line does the work</span></label>
+
+      <div class="create-actions">
+        <button id="videoComposeBtn" class="primary big">Cut the clip →</button>
+        <span id="videoHint" class="muted"></span>
+      </div>
+    </section>
+
+    <!-- VIDEO RESULTS -->
+    <section class="panel hidden" id="videoResults">
+      <h2 class="step">② Your cuts</h2>
+      <div id="vSummary" class="summary"></div>
+      <div class="resultsbar">
+        <span class="muted">Downloads stay live for 1 hour — save to Drive to keep them.</span>
+        <div class="actions">
+          <button id="vSaveDrive" class="primary">☁ Save all to Drive</button>
+        </div>
+      </div>
+      <div id="vGrid" class="vgrid"></div>
     </section>
 
     <!-- ADVANCED: manual master upload (Ideogram workflow) -->

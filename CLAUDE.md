@@ -6,6 +6,7 @@ A start-to-finish flyer tool on a **hybrid model**: AI provides the *visuals*, r
 
 - **① Compose** — pick a template, fill the info, pick a **background** from the library + a **real photo** (cut out via Remove.bg), toggle QR → the code chassis (logo, gold Bebas headline, exact info, CTA, QR, footer) is stamped over it → a finished master.
 - **② Size & ship** — the master derives into all distribution sizes, packages Meta/PMax bundles, and saves to the dated Drive tree. (Or drop your own finished master here.)
+- **🎬 Video (v1.4.0)** — the same doctrine for short-form clips. "What are we making today?" mode picker → pick footage from the `_video` Drive library, trim, hook line → ffmpeg cuts it to the **Video Output Standard v1**: cold-open (NO title slide), burned-in hook text (first 3s), corner logo watermark, 1.4s code-rendered brand **end-card** (the video chassis), loudnorm −14 LUFS, and a mandatory **ffprobe quality gate** — any output that misses the encode contract fails the compose loudly (flyer OCR-gate doctrine).
 
 **Why hybrid:** AI text/layout is inconsistent (that's why the old full-AI path made you pick from 4). Code-rendered text is **byte-identical every time**. AI is used only where it's strong — backgrounds — and those are **captured into an approved library** so they're free + repeatable.
 
@@ -16,6 +17,7 @@ A start-to-finish flyer tool on a **hybrid model**: AI provides the *visuals*, r
 So Jaymie / a hire can manage assets without code, the pools live in Google Drive:
 - **Backgrounds** → `FLYERS/_backgrounds` (`BG_FOLDER_ID`)
 - **People photos** → `FLYERS/_people` (`PEOPLE_FOLDER_ID`)
+- **Footage (video)** → `FLYERS/_video` (`VIDEO_FOLDER_ID`) — raw clips for the video cutter
 
 Add via the tool ("+ Add background" / "Upload photo") or by dropping files straight into the Drive folder. `pipeline/library.js` reads Drive via the service account in prod, and falls back to local `library/` dirs in dev (seed with `node render-service/seed-library-dev.js`).
 
@@ -56,6 +58,7 @@ render.yaml               Render single-origin deploy
 - `POST /process` — manual master(s) → all sizes · `POST /derive-one`
 - `POST /export-meta-bundle` · `POST /export-pmax-bundle` · `POST /save-to-drive`
 - `POST /assemble` (ad copy + prompt) · `GET /verify-url`
+- **Video:** `GET /videos` · `POST /upload-video` · `POST /video-compose` (sourceId|file + start/seconds/aspects/hook/end JSON → gated MP4s by token URL) · `GET /video-out/:token.mp4` (1h TTL, behind auth) · `POST /save-videos-to-drive` (`FLYERS/{tpl}/{YYYY-MM}/Video/`)
 
 ## Run
 
@@ -78,5 +81,7 @@ npm start                                  # http://localhost:3001
 - The chassis is code-locked and deterministic — keep it that way.
 - Real-people photos live only in the private Drive, never committed.
 - **Drive auth/REST is hand-rolled over `node:https` in `integrations/gdrive.js` — do NOT reintroduce the `googleapis` library.** On Render (Node 22 + gaxios/undici) every googleapis call dies with "Premature close"; node:https works. We sign the SA JWT with node crypto and hit the Drive REST API directly.
+- **Video Output Standard v1 lives in `brand.js` (`videoSizes` + `videoStandard`)** — the encode contract (1080-class, 30fps, H.264 High yuv420p CRF 20, AAC 48k, loudnorm −14 LUFS, faststart) and anatomy (hook 3s, end-card 1.4s, watermark, safe zones). `pipeline/video.js` enforces it via the ffprobe gate; `render-service/test-video.js` is the offline proof. NEVER hand-tune ffmpeg args in server.js — the standard is the single source of truth.
+- **ffmpeg/ffprobe are `ffmpeg-static` / `ffprobe-static`** — pinned binaries, same on Render and local. If a fresh `npm install` yields a tiny (~3MB) `ffmpeg.exe`, the postinstall download was truncated — delete `node_modules/ffmpeg-static` and reinstall.
 - **Fonts MUST be installed into fontconfig on the host — base64 `@font-face` is NOT enough.** Render's librsvg silently IGNORES the SVG `@font-face` data-URI embeds and falls back to a generic sans (wide, edge-to-edge, "amateur" lettering). `server.js` copies the bundled TTFs (`fonts/*.ttf`) into `~/.fonts` + `~/.local/share/fonts` and runs `fc-cache -f` at startup, because fontconfig is what librsvg actually consults. Local dev had the fonts system-wide, so **local always looked right while prod silently didn't** — ALWAYS verify the actual prod render, never a local one. A missing font is invisible in code and obvious on the page. (Root cause of the 6/23 "amateur lettering" saga; fixed `30726b0`.)
 - **(You)nity flyers are AACME/Elevate grant-compliant** — the `younity-nights` template MUST keep the verbatim publicity statement (don't fix "a Elevate"), the AACME logo, tourist-welcoming copy, AND the RSVP/registration QR (attendance tracking is a grant obligation). Never strip these.

@@ -8,3 +8,4 @@ tmp/
 test-output/
 !assets/refs/*.png
 !assets/refs/*.jpg
+library/video/
