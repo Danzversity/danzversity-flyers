@@ -10,39 +10,44 @@ const fs = require('fs');
 const path = require('path');
 const gdrive = require('../integrations/gdrive');
 
-const FOLDER = { backgrounds: process.env.BG_FOLDER_ID, people: process.env.PEOPLE_FOLDER_ID, video: process.env.VIDEO_FOLDER_ID };
+const FOLDER = { backgrounds: process.env.BG_FOLDER_ID, people: process.env.PEOPLE_FOLDER_ID, video: process.env.VIDEO_FOLDER_ID, music: process.env.MUSIC_FOLDER_ID };
 const LOCAL = {
   backgrounds: path.join(__dirname, '..', '..', 'library', 'backgrounds'),
   people: path.join(__dirname, '..', '..', 'library', 'people'),
   video: path.join(__dirname, '..', '..', 'library', 'video'),
+  music: path.join(__dirname, '..', '..', 'library', 'music'),
 };
 const IMG_RE = /\.(png|jpe?g|webp)$/i;
 const VID_RE = /\.(mp4|mov|m4v|webm)$/i;
-const EXT_RE = { backgrounds: IMG_RE, people: IMG_RE, video: VID_RE };
+const AUD_RE = /\.(mp3|m4a|aac|wav|ogg)$/i;
+const EXT_RE = { backgrounds: IMG_RE, people: IMG_RE, video: VID_RE, music: AUD_RE };
 
 function driveBacked(kind) {
   return gdrive.isConfigured() && !!FOLDER[kind];
 }
 
-// The _video pool self-provisions: no VIDEO_FOLDER_ID needed — with Drive
-// configured, FLYERS/_video is found-or-created via the SA on first use and
+// The _video/_music pools self-provision: no env id needed — with Drive
+// configured, FLYERS/<name> is found-or-created via the SA on first use and
 // cached for the process. (BG/PEOPLE keep their baked env IDs.)
-let _videoFolderPromise = null, _videoError = null;
-async function ensureVideoFolder() {
-  if (FOLDER.video || !gdrive.isConfigured()) return FOLDER.video;
-  if (!_videoFolderPromise) {
-    _videoFolderPromise = gdrive.resolvePath(['FLYERS', '_video'])
-      .then((id) => { FOLDER.video = id; _videoError = null; return id; })
-      .catch((e) => { _videoError = e.message; _videoFolderPromise = null; throw e; });
+const SELF_PROVISION = { video: '_video', music: '_music' };
+const _poolPromise = {}, _poolError = {};
+async function ensurePool(kind) {
+  const name = SELF_PROVISION[kind];
+  if (!name || FOLDER[kind] || !gdrive.isConfigured()) return FOLDER[kind];
+  if (!_poolPromise[kind]) {
+    _poolPromise[kind] = gdrive.resolvePath(['FLYERS', name])
+      .then((id) => { FOLDER[kind] = id; _poolError[kind] = null; return id; })
+      .catch((e) => { _poolError[kind] = e.message; _poolPromise[kind] = null; throw e; });
   }
-  return _videoFolderPromise;
+  return _poolPromise[kind];
 }
 
 /** List a library: [{id, name, source, thumb}]. */
 async function list(kind) {
-  if (kind === 'video') await ensureVideoFolder().catch(() => null); // fall back local on failure
+  if (SELF_PROVISION[kind]) await ensurePool(kind).catch(() => null); // fall back local on failure
   if (driveBacked(kind)) {
-    const files = await (kind === 'video' ? gdrive.listVideos(FOLDER[kind]) : gdrive.listImages(FOLDER[kind]));
+    const lister = kind === 'video' ? gdrive.listVideos : (kind === 'music' ? gdrive.listAudio : gdrive.listImages);
+    const files = await lister(FOLDER[kind]);
     return files.map((f) => ({ id: f.id, name: f.name, source: 'drive', thumb: f.thumbnailLink || null, bytes: f.size ? Number(f.size) : null }));
   }
   const dir = LOCAL[kind];
@@ -63,7 +68,7 @@ async function get(kind, id) {
 
 /** Add an asset to a library; returns {id, name, source}. */
 async function upload(kind, name, buffer, mimeType = 'image/png') {
-  if (kind === 'video') await ensureVideoFolder().catch(() => null);
+  if (SELF_PROVISION[kind]) await ensurePool(kind).catch(() => null);
   if (driveBacked(kind)) {
     const f = await gdrive.uploadImage(FOLDER[kind], name, buffer, mimeType);
     return { id: f.id, name, source: 'drive' };
@@ -79,9 +84,11 @@ function status() {
     backgrounds: driveBacked('backgrounds') ? 'drive' : 'local',
     people: driveBacked('people') ? 'drive' : 'local',
     video: driveBacked('video') ? 'drive' : 'local',
-    // Surfaced (not swallowed) so a failed FLYERS/_video self-provision is
-    // visible in /videos and /health instead of masquerading as "local by design".
-    videoError: _videoError,
+    music: driveBacked('music') ? 'drive' : 'local',
+    // Surfaced (not swallowed) so a failed pool self-provision is visible in
+    // /videos, /music and /health instead of masquerading as "local by design".
+    videoError: _poolError.video || null,
+    musicError: _poolError.music || null,
   };
 }
 

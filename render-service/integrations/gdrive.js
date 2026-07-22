@@ -100,6 +100,7 @@ async function listByMime(folderId, mimePrefix) {
 }
 const listImages = (folderId) => listByMime(folderId, 'image/');
 const listVideos = (folderId) => listByMime(folderId, 'video/');
+const listAudio = (folderId) => listByMime(folderId, 'audio/');
 
 async function downloadFile(fileId) {
   const url = `${API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`;
@@ -196,4 +197,4 @@ async function getAacmeLogo() {
   return _aacmeLogo;
 }
 
-module.exports = { isConfigured, saveImages, listImages, listVideos, downloadFile, uploadImage, resolvePath, getAacmeLogo };
+module.exports = { isConfigured, saveImages, listImages, listVideos, listAudio, downloadFile, uploadImage, resolvePath, getAacmeLogo };

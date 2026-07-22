@@ -161,6 +161,20 @@
         <input id="vHook" type="text" placeholder="POV: your first breakin class" autocomplete="off" />
       </label>
 
+      <div class="picker-block">
+        <div class="picker-head">
+          <span>Music <span class="muted" id="musSource"></span></span>
+          <div class="seg" id="musModeSeg">
+            <button class="seg-btn active" type="button" data-musmode="replace">Replaces the sound</button>
+            <button class="seg-btn" type="button" data-musmode="bed">Under the sound</button>
+          </div>
+          <button id="uploadMusBtn" class="ghost sm" type="button">⬆ Add track</button>
+          <input id="musInput" type="file" accept="audio/*" hidden />
+        </div>
+        <div id="musPicker" class="thumbs mus-thumbs">loading…</div>
+        <div class="hint">For TikTok / Reels, leave music <b>off</b> and add a trending sound in the app — burned-in songs get muted or claimed. Library tracks must be <b>royalty-free</b>.</div>
+      </div>
+
       <h3 class="substep">End-card <span class="muted">— the locked brand chassis, code-rendered every time</span></h3>
       <div class="grid3">
         <label class="field">Headline *

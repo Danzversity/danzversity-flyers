@@ -24,6 +24,8 @@ const LOOKS_KEY = 'dvzFlyerLooks';
 
 // Video mode state — footage library + last compose outputs (token URLs).
 const vid = { items: [], selectedId: null, outputs: [], maker: 'flyer' };
+// Music: OFF by default (TikTok/Reels want in-app trending audio, not burned-in tracks).
+const mus = { items: [], selectedId: null, mode: 'replace' };
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -713,7 +715,53 @@ function initVideo() {
   $('vidInput').addEventListener('change', onUploadVid);
   $('videoComposeBtn').addEventListener('click', onVideoCompose);
   $('vSaveDrive').addEventListener('click', onVSaveDrive);
+  $('uploadMusBtn').addEventListener('click', () => $('musInput').click());
+  $('musInput').addEventListener('change', onUploadMus);
+  document.querySelectorAll('#musModeSeg .seg-btn').forEach((b) => b.addEventListener('click', () => {
+    mus.mode = b.dataset.musmode === 'bed' ? 'bed' : 'replace';
+    document.querySelectorAll('#musModeSeg .seg-btn').forEach((x) => x.classList.toggle('active', x.dataset.musmode === mus.mode));
+  }));
+  syncMusMode();
   loadVideos();
+  loadMusic();
+}
+
+function syncMusMode() { $('musModeSeg').style.display = mus.selectedId ? '' : 'none'; }
+
+async function loadMusic() {
+  try {
+    const j = await (await fetch(`${API}/music`)).json();
+    mus.items = j.items || [];
+    $('musSource').textContent = `(${j.source} · ${mus.items.length})`;
+    renderMusPicker();
+  } catch (e) { $('musPicker').textContent = 'music library unavailable'; }
+}
+
+function renderMusPicker() {
+  const host = $('musPicker'); host.innerHTML = '';
+  const none = el('div', 'thumb-item mus none' + (!mus.selectedId ? ' sel' : ''), 'No music<br><span class="muted">(recommended for TikTok/Reels)</span>');
+  none.addEventListener('click', () => { mus.selectedId = null; syncMusMode(); renderMusPicker(); });
+  host.appendChild(none);
+  mus.items.forEach((t) => {
+    const d = el('div', 'thumb-item mus' + (mus.selectedId === t.id ? ' sel' : ''), `🎵<span class="vid-name">${t.name}</span>`);
+    d.title = t.name;
+    d.addEventListener('click', () => { mus.selectedId = t.id; syncMusMode(); renderMusPicker(); });
+    host.appendChild(d);
+  });
+}
+
+async function onUploadMus() {
+  const f = $('musInput').files[0]; if (!f) return;
+  const btn = $('uploadMusBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin dark"></span>Uploading…';
+  try {
+    const fd = new FormData(); fd.append('file', f);
+    const r = await (await fetch(`${API}/upload-music`, { method: 'POST', body: fd })).json();
+    if (!r.ok) throw new Error(r.error || 'upload failed');
+    mus.selectedId = r.id;
+    await loadMusic(); syncMusMode();
+    toast(`“${f.name}” added — royalty-free tracks only.`, 'ok');
+  } catch (e) { toast('Track upload failed: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = '⬆ Add track'; $('musInput').value = ''; }
 }
 
 async function loadVideos() {
@@ -777,6 +825,7 @@ async function onVideoCompose() {
   fd.append('seconds', $('vSeconds').value || '30');
   fd.append('aspects', aspects.join(','));
   if ($('vHook').value.trim()) fd.append('hook', $('vHook').value.trim());
+  if (mus.selectedId) { fd.append('musicId', mus.selectedId); fd.append('musicMode', mus.mode); }
   fd.append('end', JSON.stringify(end));
   fd.append('slug', $('vTemplate').value.trim() || headline);
 
@@ -803,9 +852,10 @@ function renderVideoResults(data) {
     const gateLine = o.gate.ok
       ? `<span class="gate ok">✓ Standard v1 — ${o.gate.checks.length} checks passed</span>`
       : `<span class="gate bad">✗ gate failed</span>`;
+    const AUDIO_LABELS = { source: 'original sound', silence: 'silent source', replace: '🎵 music', bed: '🎵 music under sound' };
     card.innerHTML = `
       <video controls playsinline preload="metadata" src="${o.url}"></video>
-      <div class="tile-meta"><span class="tile-label">${o.label}</span><span class="tile-dims muted">${o.width}×${o.height} · ${o.seconds}s · ${(o.bytes / 1e6).toFixed(1)} MB</span></div>
+      <div class="tile-meta"><span class="tile-label">${o.label}</span><span class="tile-dims muted">${o.width}×${o.height} · ${o.seconds}s · ${(o.bytes / 1e6).toFixed(1)} MB · ${AUDIO_LABELS[o.audioPlan] || ''}</span></div>
       <div class="gate-row">${gateLine}</div>`;
     const row = el('div', 'tile-row');
     const dl = el('a', 'ghost sm dl-link', '⬇ MP4'); dl.href = o.url; dl.download = o.filename;

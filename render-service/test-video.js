@@ -44,6 +44,19 @@ async function main() {
   }
   console.log(`\n${outputs.length} outputs in ${Date.now() - t0}ms · ${fail === 0 ? 'ALL GATES PASS ✓' : fail + ' GATE CHECKS FAILED ✗'}`);
 
+  // Music (v1.5): a short looping track, replace + bed — gates must pass and
+  // the reported audioPlan must say what actually happened.
+  const musSrc = path.join(os.tmpdir(), 'dvz-test-music.m4a');
+  spawnSync(video.FFMPEG, ['-y', '-f', 'lavfi', '-i', 'sine=frequency=220:duration=3', '-c:a', 'aac', musSrc], { windowsHide: true });
+  for (const mode of ['replace', 'bed']) {
+    const m = await video.composeVideo({ srcPath: src, start: 2, seconds: 8, aspects: ['9x16'], hook: null, endSpec: { headline: 'MUSIC ' + mode.toUpperCase(), url: 'DANZVERSITY.COM' }, slug: 'music-' + mode, musicPath: musSrc, musicMode: mode });
+    const o = m.outputs[0];
+    console.log(`music/${mode}: gate ${o.gate.ok ? 'PASS ✓' : 'FAIL ✗'} · audioPlan=${o.audioPlan}`);
+    if (!o.gate.ok || o.audioPlan !== mode) fail++;
+    fs.rmSync(m.workDir, { recursive: true, force: true });
+  }
+  fs.unlinkSync(musSrc);
+
   // No-audio source path: gate must still pass with synthesized silence.
   const srcMute = path.join(os.tmpdir(), 'dvz-test-src-mute.mp4');
   spawnSync(video.FFMPEG, ['-y', '-f', 'lavfi', '-i', 'testsrc2=size=720x1280:rate=30:duration=6', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', srcMute], { windowsHide: true });

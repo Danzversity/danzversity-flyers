@@ -155,7 +155,7 @@ async function endCardPng(spec, W, H) {
 }
 
 // ── Cut one aspect ───────────────────────────────────────────────────────────
-async function cutOne({ srcPath, srcMeta, start, seconds, size, hook, endSpec, dir, slug }) {
+async function cutOne({ srcPath, srcMeta, start, seconds, size, hook, endSpec, dir, slug, musicPath, musicMode }) {
   const { w: W, h: H } = size;
   const wmPath = path.join(dir, `wm-${size.key}.png`);
   const endPath = path.join(dir, `end-${size.key}.png`);
@@ -171,8 +171,9 @@ async function cutOne({ srcPath, srcMeta, start, seconds, size, hook, endSpec, d
   // Video chain: fill-crop to the frame, normalize fps/SAR, watermark always,
   // hook for the first hookSeconds; end-card fades in, concat, single encode.
   const inputs = ['-ss', String(start), '-t', String(seconds), '-i', srcPath, '-i', wmPath];
-  let idx = 2, hookIdx = -1;
+  let idx = 2, hookIdx = -1, musIdx = -1;
   if (hookPath) { inputs.push('-i', hookPath); hookIdx = idx++; }
+  if (musicPath) { inputs.push('-stream_loop', '-1', '-i', musicPath); musIdx = idx++; } // loop short tracks
   inputs.push('-loop', '1', '-t', String(VS.endCardSeconds), '-i', endPath);
   const endIdx = idx++;
 
@@ -184,9 +185,19 @@ async function cutOne({ srcPath, srcMeta, start, seconds, size, hook, endSpec, d
   fc.push(`[${endIdx}:v]scale=${W}:${H},setsar=1,fps=${VS.fps},fade=t=in:st=0:d=0.25[vend]`);
   // Audio: loudness-normalized to the platform target (-14 LUFS). loudnorm
   // outputs 192kHz — aresample back down. Silence when the source is mute.
-  fc.push(hasAudio
-    ? `[0:a]loudnorm=I=${VS.loudnormI}:TP=-1.5:LRA=11,aresample=${VS.audioRate},afade=t=out:st=${fadeSt}:d=0.35,atrim=0:${seconds}[amain]`
-    : `anullsrc=r=${VS.audioRate}:cl=stereo,atrim=0:${seconds}[amain]`);
+  // Music modes (v1.5): 'replace' = the track IS the audio; 'bed' = track
+  // mixed low under the source (falls back to replace on a mute source).
+  // Loudnorm runs AFTER any mix so the gate contract holds either way.
+  const FINISH = `loudnorm=I=${VS.loudnormI}:TP=-1.5:LRA=11,aresample=${VS.audioRate},afade=t=out:st=${fadeSt}:d=0.35,atrim=0:${seconds}`;
+  const audioPlan = musIdx >= 0 ? (musicMode === 'bed' && hasAudio ? 'bed' : 'replace') : (hasAudio ? 'source' : 'silence');
+  if (audioPlan === 'source') fc.push(`[0:a]${FINISH}[amain]`);
+  else if (audioPlan === 'silence') fc.push(`anullsrc=r=${VS.audioRate}:cl=stereo,atrim=0:${seconds}[amain]`);
+  else if (audioPlan === 'replace') fc.push(`[${musIdx}:a]atrim=0:${seconds},${FINISH}[amain]`);
+  else fc.push(
+    `[0:a]aresample=${VS.audioRate}[a0]`,
+    `[${musIdx}:a]atrim=0:${seconds},aresample=${VS.audioRate},volume=${VS.musicBedVolume}[abed]`,
+    `[a0][abed]amix=inputs=2:duration=first,${FINISH}[amain]`
+  );
   fc.push(`anullsrc=r=${VS.audioRate}:cl=stereo,atrim=0:${VS.endCardSeconds}[aend]`);
   fc.push(`[vmain][amain][vend][aend]concat=n=2:v=1:a=1[vcat][aout]`);
   fc.push(`[vcat]format=${VS.pixFmt}[vout]`);
@@ -203,7 +214,7 @@ async function cutOne({ srcPath, srcMeta, start, seconds, size, hook, endSpec, d
 
   const expected = seconds + VS.endCardSeconds;
   const g = await gate(outPath, { w: W, h: H, expectedSeconds: expected });
-  return { path: outPath, filename: path.basename(outPath), sizeKey: size.key, label: size.label, width: W, height: H, seconds: g.probed.duration, bytes: g.probed.bytes, gate: g };
+  return { path: outPath, filename: path.basename(outPath), sizeKey: size.key, label: size.label, width: W, height: H, seconds: g.probed.duration, bytes: g.probed.bytes, audioPlan, gate: g };
 }
 
 // ── The quality gate — every output must pass, or the compose fails ──────────
@@ -243,7 +254,11 @@ async function composeVideo(o) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dvz-video-'));
   const outputs = [];
   for (const a of aspects) {
-    const out = await cutOne({ srcPath: o.srcPath, srcMeta, start, seconds, size: brand.videoSizes[a], hook: o.hook, endSpec: o.endSpec || {}, dir, slug: o.slug || 'clip' });
+    const out = await cutOne({
+      srcPath: o.srcPath, srcMeta, start, seconds, size: brand.videoSizes[a], hook: o.hook,
+      endSpec: o.endSpec || {}, dir, slug: o.slug || 'clip',
+      musicPath: o.musicPath || null, musicMode: o.musicMode === 'bed' ? 'bed' : 'replace',
+    });
     if (!out.gate.ok) {
       const bad = out.gate.checks.filter((c) => !c.ok).map((c) => `${c.name}: got ${c.got}, want ${c.want}`).join('; ');
       throw new Error(`Quality gate FAILED on ${a}: ${bad}`);

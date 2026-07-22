@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.4.3'; // 1.4.3: surface the FLYERS/_video self-provision error (was silently falling back to local)
+const VERSION = '1.5.0'; // 1.5.0: MUSIC — optional royalty-free track per cut (replace | bed under source), off by default
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -565,6 +565,21 @@ app.post('/upload-video', videoUpload.single('file'), async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// Music pool (v1.5) — royalty-free tracks only; FLYERS/_music self-provisions.
+app.get('/music', async (req, res) => {
+  try {
+    const items = await library.list('music');
+    const st = library.status();
+    res.json({ ok: true, source: st.music, musicError: st.musicError || null, items });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/upload-music', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'file required' });
+    res.json({ ok: true, ...(await library.upload('music', req.file.originalname || `track-${Date.now()}.mp3`, req.file.buffer, req.file.mimetype || 'audio/mpeg')) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 app.get('/video-out/:token.mp4', (req, res) => {
   const entry = _videoOut.get(req.params.token);
   if (!entry || !require('fs').existsSync(entry.path)) return res.status(404).send('gone');
@@ -579,7 +594,7 @@ app.get('/video-out/:token.mp4', (req, res) => {
 app.post('/video-compose', videoUpload.single('video'), async (req, res) => {
   const t0 = Date.now();
   const fsx = require('fs');
-  let srcPath = null, srcIsTemp = false;
+  let srcPath = null, srcIsTemp = false, musicPath = null;
   try {
     if (req.file) { srcPath = req.file.path; srcIsTemp = true; }
     else if (req.body.sourceId) {
@@ -587,6 +602,13 @@ app.post('/video-compose', videoUpload.single('video'), async (req, res) => {
       srcPath = path.join(require('os').tmpdir(), `dvz-src-${Date.now()}.mp4`);
       fsx.writeFileSync(srcPath, buf); srcIsTemp = true;
     } else return res.status(400).json({ ok: false, error: 'Upload a video or pick one from the library.' });
+
+    // Optional music track from the _music pool (royalty-free only).
+    if (req.body.musicId) {
+      const mbuf = await library.get('music', req.body.musicId);
+      musicPath = path.join(require('os').tmpdir(), `dvz-mus-${Date.now()}`);
+      fsx.writeFileSync(musicPath, mbuf);
+    }
 
     let endSpec = {};
     if (req.body.end) { try { endSpec = JSON.parse(req.body.end); } catch (_) { return res.status(400).json({ ok: false, error: 'end must be JSON' }); } }
@@ -600,6 +622,8 @@ app.post('/video-compose', videoUpload.single('video'), async (req, res) => {
       hook: (req.body.hook || '').trim() || null,
       endSpec,
       slug,
+      musicPath,
+      musicMode: req.body.musicMode,
     });
 
     const results = outputs.map((o) => {
@@ -608,6 +632,7 @@ app.post('/video-compose', videoUpload.single('video'), async (req, res) => {
       return {
         sizeKey: o.sizeKey, label: o.label, filename: o.filename, width: o.width, height: o.height,
         seconds: Math.round(o.seconds * 10) / 10, bytes: o.bytes, token, url: `/video-out/${token}.mp4`,
+        audioPlan: o.audioPlan, // source | silence | replace | bed — say what the audio actually is
         gate: { ok: o.gate.ok, checks: o.gate.checks, byConstruction: o.gate.byConstruction },
       };
     });
@@ -617,6 +642,7 @@ app.post('/video-compose', videoUpload.single('video'), async (req, res) => {
     res.status(e.status || 500).json({ ok: false, error: e.message });
   } finally {
     if (srcIsTemp && srcPath) { try { fsx.unlinkSync(srcPath); } catch (_) { /* gone */ } }
+    if (musicPath) { try { fsx.unlinkSync(musicPath); } catch (_) { /* gone */ } }
   }
 });
 

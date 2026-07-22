@@ -202,6 +202,11 @@ const videoStandard = {
   endCardSeconds: 1.4,       // code-rendered brand end-card
   watermarkWidthFrac: 0.14,  // logo watermark width as a fraction of frame W
   watermarkOpacity: 0.55,
+  // Music (v1.5): OFF by default — TikTok/Reels want trending audio added
+  // in-app, and burned-in popular songs get muted/claimed. Library tracks are
+  // royalty-free only. 'bed' mixes music under the source at this pre-mix
+  // ratio (loudnorm still sets the final level).
+  musicBedVolume: 0.22,
   // Safe zones (9:16): keep critical text out of TikTok's UI — right-side icon
   // rail (~ right 15%), bottom caption zone (~ bottom 18%), top bar (~ top 8%).
   safeZones: { top: 0.08, bottom: 0.18, right: 0.15 },
