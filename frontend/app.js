@@ -509,6 +509,7 @@ const PLACEMENTS = {
   'site-card': { platforms: ['facebook'],              placement: 'feed',  useCaption: true,  btn: '📣 FB only', desc: 'Facebook feed only — website asset' },
   '1.91x1':    { platforms: ['facebook'],              placement: 'feed',  useCaption: true,  btn: '📣 FB only', desc: 'Facebook feed only — ad size' },
   // '2x1' email banner: an email asset, not a social one — no Post button.
+  // '3x2' listing: VisitAustin.com upload asset (manual portal) — no Post button.
 };
 
 function renderGrid() {
