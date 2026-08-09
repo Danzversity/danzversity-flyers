@@ -62,7 +62,9 @@ function wrapWords(s, maxChars) {
 }
 
 // ── Style A (standard) — also drives Style B via opts ────────────────────────
-function svgStyleA(W, H, spec, opts = {}) {
+// boxes: out-param — bottom-block element rects are pushed here so compose()
+// can run the geometry QA gate against the QR tile.
+function svgStyleA(W, H, spec, opts = {}, boxes = []) {
   const cx = W / 2, F = (f) => Math.round(H * f);
   const style = resolveStyle(spec);
   const A = style.accent; // accent layer color (gold in the classic pack)
@@ -113,20 +115,29 @@ function svgStyleA(W, H, spec, opts = {}) {
 
   // Bottom block — anchored above the footer; lifted well clear of the QR when a
   // compliance line is present (so a lineup tagline never runs under the code).
+  // Horizontal dims are fractions of WIDTH (calibrated to the blessed 4:5 render,
+  // where H = 1.25·W — H-fractions there ballooned 42% wider on 9:16 and ran the
+  // pill/badge under the QR tile). Vertical dims stay H-based.
+  // Belt-and-suspenders: when a QR is present, centered elements are capped so
+  // their right edge keeps ≥0.022·W clearance from the QR tile.
+  const qg = qrGeom(W, H, spec);
+  const qrCap = qg ? 2 * (qg.left - Math.round(W * 0.022) - cx) : Infinity;
   let y = F(hasCompliance ? 0.83 : 0.912);
   if (spec.cta) {
-    const pw = F(0.32), ph = F(0.050), px = cx - pw / 2, py = y - ph;
+    const pw = Math.min(Math.round(W * 0.40), qrCap), ph = F(0.050), px = cx - pw / 2, py = y - ph;
     L.push(`<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${ph / 2}" fill="${A}"/>`);
     L.push(t(spec.cta, py + ph * 0.70, F(0.030), BLK, { maxW: pw * 0.9 }));
+    boxes.push({ name: 'cta', x: px, y: py, w: pw, h: ph });
     y = py - F(0.024);
   }
   // Urgency strip — accent-outlined badge just above the CTA (scarcity / deadline).
   if (spec.urgency) {
     const uh = F(0.042);
-    const uw = Math.min(F(0.80), Math.max(F(0.34), spec.urgency.length * F(0.0142) + F(0.06)));
+    const uw = Math.min(Math.round(W * 1.00), Math.max(Math.round(W * 0.425), spec.urgency.length * Math.round(W * 0.01775) + Math.round(W * 0.075)), qrCap);
     const uy = y - uh;
     L.push(`<rect x="${cx - uw / 2}" y="${uy}" width="${uw}" height="${uh}" rx="${uh / 2}" fill="#000000" fill-opacity="0.35" stroke="${A}" stroke-width="${Math.max(2, F(0.0032))}"/>`);
     L.push(t(spec.urgency, uy + uh * 0.66, F(0.0235), A, { ls: 1.5 }));
+    boxes.push({ name: 'urgency', x: cx - uw / 2, y: uy, w: uw, h: uh });
     y = uy - F(0.024);
   }
   if (spec.price) { L.push(t(spec.price, y, F(0.035), A, { maxW: W * 0.88 })); y -= F(0.046); }
@@ -181,12 +192,24 @@ function svgTestimonial(W, H, spec) {
   return L.join('');
 }
 
-function chassisSVG(W, H, spec) {
+function chassisSVG(W, H, spec, boxes = []) {
   const layout = spec.layout || 'A';
   if (layout === 'A-Lite') return svgALite(W, H, spec);
   if (layout === 'testimonial') return svgTestimonial(W, H, spec);
-  if (layout === 'B') return svgStyleA(W, H, spec, { headlineSize: 0.080, headlineBar: true, scrimTop: 0.40, topShift: 0.02, kickerY: 0.192, kickerSize: 0.027 });
-  return svgStyleA(W, H, spec, { headlineSize: 0.062 });
+  if (layout === 'B') return svgStyleA(W, H, spec, { headlineSize: 0.080, headlineBar: true, scrimTop: 0.40, topShift: 0.02, kickerY: 0.192, kickerSize: 0.027 }, boxes);
+  return svgStyleA(W, H, spec, { headlineSize: 0.062 }, boxes);
+}
+
+// QR tile geometry — the single source for WHERE the QR sits, shared by the
+// layout (clearance caps), the compositor (placement) and the QA gate.
+function qrGeom(W, H, spec) {
+  if (!spec || !spec.qr) return null;
+  const qs = Math.round(W * 0.155);
+  const pad = Math.round(qs * 0.12);
+  const label = spec.qrLabel || (spec.cta ? 'SCAN TO REGISTER' : null);
+  const labelH = label ? Math.round(qs * 0.20) : 0;
+  const tw = qs + pad * 2, th = qs + pad * 2 + labelH;
+  return { qs, label, tw, th, left: W - tw - Math.round(W * 0.045), top: H - th - Math.round(H * 0.05) };
 }
 
 async function qrPng(data, size) {
@@ -275,15 +298,31 @@ async function personLayers(personInput, W, H, layout) {
 
   // ── Cutout: fit within its zone, ground it with a soft contact shadow. ──
   if (isCutout) {
+    // Trim the transparent border FIRST — Remove.bg returns the cutout on the
+    // full source canvas, so without this the zone sizes the canvas, not the
+    // person (a subject filling 40% of the source rendered at ~12% of the flyer).
+    let cut = personInput;
+    try { cut = await sharp(personInput).trim().png().toBuffer(); } catch (e) { /* nothing to trim */ }
     const ph = Math.round(H * (isPaid ? 0.70 : 0.29));
     const maxW = Math.round(W * (isPaid ? 0.94 : 0.86));
-    const resized = await sharp(personInput).resize({ height: ph, width: maxW, fit: 'inside' }).png().toBuffer();
+    const resized = await sharp(cut).resize({ height: ph, width: maxW, fit: 'inside' }).png().toBuffer();
     const m = await sharp(resized).metadata();
     const left = Math.round((W - m.width) / 2);
     const top = isPaid ? Math.round(H * 0.13) : Math.round(H * 0.34);
     const sigma = Math.max(2, Math.round(ph * 0.02));
     const shadow = await sharp(resized).modulate({ brightness: 0 }).blur(sigma).png().toBuffer();
-    return [{ input: shadow, top: top + Math.round(ph * 0.022), left }, { input: resized, top, left }];
+    // Alpha-weighted subject share for the QA gate — opaque pixels vs canvas.
+    // (A raw bounding box lies: a tall narrow dancer has a small box but is fine;
+    // an untrimmed source canvas has a huge box but a tiny visible subject.)
+    const st = await sharp(resized).stats();
+    const alphaMean = st.channels.length > 3 ? st.channels[3].mean / 255 : 1;
+    const subjectShare = (alphaMean * m.width * m.height) / (W * H);
+    return {
+      kind: 'cutout',
+      box: { x: left, y: top, w: m.width, h: m.height },
+      subjectShare,
+      layers: [{ input: shadow, top: top + Math.round(ph * 0.022), left }, { input: resized, top, left }],
+    };
   }
 
   // ── Paid scene: photo-dominant high band, top-edge feather only. ──
@@ -293,7 +332,8 @@ async function personLayers(personInput, W, H, layout) {
       .modulate({ brightness: 0.94, saturation: 0.9 }).ensureAlpha().png().toBuffer();
     const m = await sharp(resized).metadata();
     const masked = await sharp(resized).composite([{ input: featherMaskSVG(m.width, m.height), blend: 'dest-in' }]).png().toBuffer();
-    return [{ input: masked, top: Math.round(H * 0.13), left: Math.round((W - m.width) / 2) }];
+    const left = Math.round((W - m.width) / 2), top = Math.round(H * 0.13);
+    return { kind: 'scene', box: { x: left, y: top, w: m.width, h: m.height }, layers: [{ input: masked, top, left }] };
   }
 
   // ── Standard scene (A/B): SMART-CROP to the dancers (cover + attention) into a
@@ -310,7 +350,35 @@ async function personLayers(personInput, W, H, layout) {
   treated = await sharp(treated)
     .composite([{ input: sideMaskSVG(bandW, bandH), blend: 'dest-in' }])   // feather left + right
     .png().toBuffer();
-  return [{ input: treated, top, left }];
+  return { kind: 'scene', box: { x: left, y: top, w: bandW, h: bandH }, layers: [{ input: treated, top, left }] };
+}
+
+// ── Tier-1 geometry QA gate ──────────────────────────────────────────────────
+// Deterministic reject-gate run on every compose, per size (flyer OCR-gate
+// doctrine): the compositor already knows every element's exact box, so the two
+// known failure classes are caught by pure geometry BEFORE any output ships:
+//  1. the QR tile intersecting a chassis bottom-block element (CTA / urgency);
+//  2. a person cutout rendering too small — measured as the ALPHA-WEIGHTED
+//     share (opaque pixels vs canvas), because a raw bounding box lies both
+//     ways: legit renders land 3–6%, an untrimmed source canvas ~1%.
+// A violation throws with the size + measured numbers so the compose fails loudly.
+function rectOverlap(a, b) {
+  const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  return ox > 0 && oy > 0 ? { x: ox, y: oy } : null;
+}
+function qaGate(W, H, { qr, chassisBoxes = [], person }) {
+  const at = `${W}x${H}`;
+  if (qr) {
+    const qrBox = { x: qr.left, y: qr.top, w: qr.tw, h: qr.th };
+    for (const b of chassisBoxes) {
+      const ov = rectOverlap(qrBox, b);
+      if (ov) throw new Error(`QA gate [${at}]: QR tile intersects ${b.name} by ${ov.x}x${ov.y}px — layout collision, flyer rejected`);
+    }
+  }
+  if (person && person.kind === 'cutout' && person.subjectShare != null && person.subjectShare < 0.02) {
+    throw new Error(`QA gate [${at}]: person cutout covers ${(person.subjectShare * 100).toFixed(1)}% of the canvas (min 2%) — subject too small, check the source photo/cutout`);
+  }
 }
 
 /**
@@ -325,11 +393,14 @@ async function compose(o) {
 
   // Real photo over the plate — integrated (feathered/graded or floated with a
   // contact shadow), never a hard-pasted rectangle. See personLayers().
+  let person = null;
   if (o.person && layout !== 'testimonial') {
-    for (const lyr of await personLayers(o.person, W, H, layout)) layers.push(lyr);
+    person = await personLayers(o.person, W, H, layout);
+    for (const lyr of person.layers) layers.push(lyr);
   }
 
-  layers.push({ input: Buffer.from(chassisSVG(W, H, spec)), top: 0, left: 0 });
+  const chassisBoxes = [];
+  layers.push({ input: Buffer.from(chassisSVG(W, H, spec, chassisBoxes)), top: 0, left: 0 });
 
   // Logo — smaller for paid; centered top.
   if (spec.logo !== false && layout !== 'testimonial' && fs.existsSync(LOGO_PATH)) {
@@ -338,12 +409,14 @@ async function compose(o) {
     layers.push({ input: logoBuf, top: Math.round(H * 0.04), left: Math.round((W - lw) / 2) });
   }
 
-  if (spec.qr) {
-    const qs = Math.round(W * 0.155);
-    const tile = await qrTile(spec.qr, qs, spec.qrLabel || (spec.cta ? 'SCAN TO REGISTER' : null));
-    const tm = await sharp(tile).metadata();
-    layers.push({ input: tile, top: H - tm.height - Math.round(H * 0.05), left: W - tm.width - Math.round(W * 0.045) });
+  const qg = qrGeom(W, H, spec);
+  if (qg) {
+    const tile = await qrTile(spec.qr, qg.qs, qg.label);
+    layers.push({ input: tile, top: qg.top, left: qg.left });
   }
+
+  // Tier-1 QA gate — fail the compose loudly, never ship a broken flyer.
+  qaGate(W, H, { qr: qg, chassisBoxes, person });
 
   // AACME grant logo (Elevate compliance) — bottom-left corner.
   if (o.aacmeLogo) {
@@ -356,4 +429,4 @@ async function compose(o) {
   return base.composite(layers).png({ compressionLevel: 9 }).toBuffer();
 }
 
-module.exports = { compose, chassisSVG, qrPng, FONT_PATH, LOGO_PATH };
+module.exports = { compose, chassisSVG, qrPng, qrGeom, qaGate, FONT_PATH, LOGO_PATH };

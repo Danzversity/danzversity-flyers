@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.5.1'; // 1.5.1: 3:2 listing size (1800×1200) for VisitAustin.com — derived in every organic set
+const VERSION = '1.5.2'; // 1.5.2: 9:16 QR-overlap fix (bottom-block widths → W-based + QR clearance cap), cutout trim-to-subject, Tier-1 geometry QA gate
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
