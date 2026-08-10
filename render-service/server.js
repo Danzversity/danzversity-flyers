@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.5.3'; // 1.5.3: QA-gate subject check keys on trim success (fixed 2% canvas-share floor false-positived legit 1:1 cutouts)
+const VERSION = '1.5.4'; // 1.5.4: 3:2 listing derives with blur-fill (July 25 VisitAustin treatment) instead of flat letterbox bars
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';

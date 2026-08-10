@@ -39,22 +39,40 @@ async function deriveSize(masterBuffer, sizeKey, opts = {}) {
   const size = brand.sizes[sizeKey];
   if (!size) throw new Error(`Unknown size: ${sizeKey}`);
 
-  const policy = opts.policy === 'smart' ? 'smart' : 'letterbox';
+  // A size can pin its own policy (e.g. 3x2 → blur-fill for listing-site heroes);
+  // otherwise the caller's choice applies, defaulting to letterbox.
+  const policy = size.policy || (opts.policy === 'smart' ? 'smart' : 'letterbox');
 
   // Always flatten onto black first so any transparency in the master becomes
   // brand black (and letterbox bars match the baked background seamlessly).
   const pipeline = sharp(masterBuffer).rotate().flatten({ background: brand.LETTERBOX_FILL });
 
-  if (policy === 'smart') {
-    // Saliency-aware fill-crop. attention focuses on the highest-contrast region
-    // (the dancers), which is what we want to keep when filling wide/short frames.
-    const position = opts.position || sharp.strategy.attention;
-    pipeline.resize(size.w, size.h, { fit: 'cover', position });
+  let buffer;
+  if (policy === 'blur') {
+    // Blur-fill: the whole master fits (nothing baked is ever cropped), and the
+    // gutters carry a blurred, darkened blow-up of the same art instead of flat
+    // bars — the treatment the July 25 VisitAustin listing shipped with.
+    const flat = await pipeline.png().toBuffer();
+    const bg = await sharp(flat)
+      .resize(size.w, size.h, { fit: 'cover', position: sharp.strategy.attention })
+      .blur(24).modulate({ brightness: 0.55, saturation: 0.85 })
+      .png().toBuffer();
+    const fg = await sharp(flat).resize(size.w, size.h, { fit: 'inside' }).png().toBuffer();
+    const m = await sharp(fg).metadata();
+    buffer = await sharp(bg)
+      .composite([{ input: fg, top: Math.round((size.h - m.height) / 2), left: Math.round((size.w - m.width) / 2) }])
+      .png({ compressionLevel: 9 }).toBuffer();
   } else {
-    pipeline.resize(size.w, size.h, { fit: 'contain', background: brand.LETTERBOX_FILL });
+    if (policy === 'smart') {
+      // Saliency-aware fill-crop. attention focuses on the highest-contrast region
+      // (the dancers), which is what we want to keep when filling wide/short frames.
+      const position = opts.position || sharp.strategy.attention;
+      pipeline.resize(size.w, size.h, { fit: 'cover', position });
+    } else {
+      pipeline.resize(size.w, size.h, { fit: 'contain', background: brand.LETTERBOX_FILL });
+    }
+    buffer = await pipeline.png({ compressionLevel: 9 }).toBuffer();
   }
-
-  const buffer = await pipeline.png({ compressionLevel: 9 }).toBuffer();
   return {
     sizeKey,
     label: size.label,

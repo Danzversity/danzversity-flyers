@@ -147,7 +147,7 @@ const sizes = {
   '9x16':      { key: '9x16',      label: '9:16 story',       w: 1080, h: 1920, master: true,  useCase: 'Stories, Reels, TikTok' },
   '16x9':      { key: '16x9',      label: '16:9 landscape',   w: 1920, h: 1005, master: false, useCase: 'FB event cover, program page hero' },
   '4x3':       { key: '4x3',       label: '4:3',              w: 1200, h:  900, master: false, useCase: 'GBP post image' },
-  '3x2':       { key: '3x2',       label: '3:2 listing',      w: 1800, h: 1200, master: false, useCase: 'VisitAustin.com event listing (grant-required)' },
+  '3x2':       { key: '3x2',       label: '3:2 listing',      w: 1800, h: 1200, master: false, policy: 'blur', useCase: 'VisitAustin.com event listing (grant-required) — blur-fill, never flat bars' },
   '2x1':       { key: '2x1',       label: '2:1 email banner', w:  600, h:  300, master: false, useCase: 'Brevo email header' },
   'site-card': { key: 'site-card', label: '1.75:1 site card', w:  560, h:  320, master: false, useCase: '/collective offering card' },
   '1.91x1':    { key: '1.91x1',    label: '1.91:1 landscape', w: 1200, h:  628, master: false, useCase: 'Google PMax / Display landscape (paid)' },
