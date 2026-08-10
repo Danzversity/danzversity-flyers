@@ -301,8 +301,10 @@ async function personLayers(personInput, W, H, layout) {
     // Trim the transparent border FIRST — Remove.bg returns the cutout on the
     // full source canvas, so without this the zone sizes the canvas, not the
     // person (a subject filling 40% of the source rendered at ~12% of the flyer).
-    let cut = personInput;
-    try { cut = await sharp(personInput).trim().png().toBuffer(); } catch (e) { /* nothing to trim */ }
+    // `trimmed` feeds the QA gate: a successful trim means the subject fills its
+    // zone by construction; only a silent trim failure can reproduce the bug.
+    let cut = personInput, trimmed = true;
+    try { cut = await sharp(personInput).trim().png().toBuffer(); } catch (e) { trimmed = false; }
     const ph = Math.round(H * (isPaid ? 0.70 : 0.29));
     const maxW = Math.round(W * (isPaid ? 0.94 : 0.86));
     const resized = await sharp(cut).resize({ height: ph, width: maxW, fit: 'inside' }).png().toBuffer();
@@ -321,6 +323,7 @@ async function personLayers(personInput, W, H, layout) {
       kind: 'cutout',
       box: { x: left, y: top, w: m.width, h: m.height },
       subjectShare,
+      trimmed,
       layers: [{ input: shadow, top: top + Math.round(ph * 0.022), left }, { input: resized, top, left }],
     };
   }
@@ -358,9 +361,13 @@ async function personLayers(personInput, W, H, layout) {
 // doctrine): the compositor already knows every element's exact box, so the two
 // known failure classes are caught by pure geometry BEFORE any output ships:
 //  1. the QR tile intersecting a chassis bottom-block element (CTA / urgency);
-//  2. a person cutout rendering too small — measured as the ALPHA-WEIGHTED
-//     share (opaque pixels vs canvas), because a raw bounding box lies both
-//     ways: legit renders land 3–6%, an untrimmed source canvas ~1%.
+//  2. a person cutout rendering too small. A successful alpha-trim means the
+//     subject fills its zone BY CONSTRUCTION, so trimmed cutouts always pass —
+//     a fixed canvas-share floor false-positived on legit lean/spread poses at
+//     1:1 (8/9). The bug is only reproducible when trim silently FAILS and the
+//     full source canvas sneaks through, so the gate fires on !trimmed with a
+//     low alpha-weighted canvas share (bug case ~1%), plus an absolute 0.5%
+//     floor as a backstop for pathological inputs even when trim succeeded.
 // A violation throws with the size + measured numbers so the compose fails loudly.
 function rectOverlap(a, b) {
   const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
@@ -376,8 +383,11 @@ function qaGate(W, H, { qr, chassisBoxes = [], person }) {
       if (ov) throw new Error(`QA gate [${at}]: QR tile intersects ${b.name} by ${ov.x}x${ov.y}px — layout collision, flyer rejected`);
     }
   }
-  if (person && person.kind === 'cutout' && person.subjectShare != null && person.subjectShare < 0.02) {
-    throw new Error(`QA gate [${at}]: person cutout covers ${(person.subjectShare * 100).toFixed(1)}% of the canvas (min 2%) — subject too small, check the source photo/cutout`);
+  if (person && person.kind === 'cutout' && person.subjectShare != null) {
+    const min = person.trimmed ? 0.005 : 0.02;
+    if (person.subjectShare < min) {
+      throw new Error(`QA gate [${at}]: person cutout covers ${(person.subjectShare * 100).toFixed(1)}% of the canvas (min ${min * 100}%${person.trimmed ? '' : ', trim failed'}) — subject too small, check the source photo/cutout`);
+    }
   }
 }
 

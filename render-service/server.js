@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.5.2'; // 1.5.2: 9:16 QR-overlap fix (bottom-block widths → W-based + QR clearance cap), cutout trim-to-subject, Tier-1 geometry QA gate
+const VERSION = '1.5.3'; // 1.5.3: QA-gate subject check keys on trim success (fixed 2% canvas-share floor false-positived legit 1:1 cutouts)
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
