@@ -234,6 +234,8 @@ dialog::backdrop { background: rgba(0,0,0,.72); }
 dialog h3 { margin: 0 0 14px; font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: .5px; color: var(--gold); font-weight: 400; }
 .post-preview { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .post-preview img { width: 76px; height: 95px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
+.post-preview video { max-width: 130px; max-height: 130px; border-radius: 6px; border: 1px solid var(--line); background: #000; }
+.post-preview video.hidden, .post-preview img.hidden { display: none; }
 dialog textarea {
   width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
   border-radius: 8px; padding: 10px 12px; font-family: inherit; font-size: 14px; line-height: 1.5; resize: vertical;

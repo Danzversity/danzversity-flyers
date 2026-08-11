@@ -24,12 +24,14 @@ function sweep() {
 
 function isConfigured() { return !!RAIL_KEY; }
 
-// Register a buffer for public serving; returns its public URL.
+// Register a buffer for public serving; returns its public URL. The extension
+// follows the type — Meta's Graph API fetches .jpg for photos, .mp4 for video.
 function registerPublic(buffer, type = 'image/jpeg') {
   sweep();
   const token = crypto.randomBytes(24).toString('hex');
   store.set(token, { buffer, type, expires: Date.now() + TTL_MS });
-  return { token, url: `${PUBLIC_BASE}/pub/${token}.jpg` };
+  const ext = type === 'video/mp4' ? 'mp4' : 'jpg';
+  return { token, url: `${PUBLIC_BASE}/pub/${token}.${ext}` };
 }
 
 function getPublic(token) {
@@ -54,4 +56,16 @@ async function post({ imageBuffer, caption = '', platforms = ['facebook', 'insta
   return { ...data, publicImageUrl: url };
 }
 
-module.exports = { isConfigured, registerPublic, getPublic, post };
+// Post a VIDEO via the rail (v5): FB Page video + IG Reel (feed) or IG video
+// story (story). IG's video processing runs 30s-2min, so the rail call gets a
+// long timeout — the rail itself polls the container to FINISHED before publish.
+async function postVideo({ videoBuffer, caption = '', platforms = ['facebook', 'instagram'], placement = 'feed', mode = 'preview' }) {
+  if (!RAIL_KEY) throw new Error('SOCIAL_RAIL_KEY not set on this server — add it in the Render dashboard env.');
+  const { url } = registerPublic(videoBuffer, 'video/mp4');
+  const { status, json: data } = await postJson(RAIL_URL, { key: RAIL_KEY, mode, platforms, placement, text: caption, videoUrl: url }, { timeout: 180000 });
+  if (data && (data.sent || data.preview)) return { ...data, publicVideoUrl: url };
+  if (status < 200 || status >= 300) throw new Error(`social rail ${status}: ${JSON.stringify(data).slice(0, 300)}`);
+  return { ...data, publicVideoUrl: url };
+}
+
+module.exports = { isConfigured, registerPublic, getPublic, post, postVideo };

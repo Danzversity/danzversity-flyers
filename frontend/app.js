@@ -52,7 +52,7 @@ function init() {
 
 // ── Maker mode: "What are we making today?" — Flyer | Video ──────────────────
 const FLYER_PANELS = ['createPanel', 'resultsPanel', 'inputPanel'];
-const VIDEO_PANELS = ['videoPanel', 'videoResults'];
+const VIDEO_PANELS = ['videoPanel', 'videoPostExisting', 'videoResults'];
 function setMaker(m) {
   vid.maker = m === 'video' ? 'video' : 'flyer';
   document.querySelectorAll('#makerToggle .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.maker === vid.maker));
@@ -582,6 +582,9 @@ function setPostStage(stage) {
 }
 function openPostDialog(plan) {
   post.plan = plan;
+  post.video = null;
+  $('postVid').classList.add('hidden'); $('postVid').removeAttribute('src');
+  $('postImg').classList.remove('hidden');
   const first = plan[0];
   $('postImg').src = `data:image/png;base64,${first.img.base64}`;
   $('postMeta').textContent = plan.length === 1
@@ -617,6 +620,7 @@ function openPostDialog(plan) {
   $('postDialog').showModal();
 }
 async function onPostSend() {
+  if (post.video) return onVideoPostSend();
   if (!post.plan.length) return;
   const caption = $('postCaption').value.trim();
   const entries = post.plan.map((e) => ({ ...e }));
@@ -716,6 +720,14 @@ function initVideo() {
   $('vidInput').addEventListener('change', onUploadVid);
   $('videoComposeBtn').addEventListener('click', onVideoCompose);
   $('vSaveDrive').addEventListener('click', onVSaveDrive);
+  // 📤 Post a finished video as-is (the Hootsuite path — no re-cut, no chassis).
+  $('vPostExistingBtn').addEventListener('click', () => $('vPostFile').click());
+  $('vPostFile').addEventListener('change', () => {
+    const f = $('vPostFile').files[0];
+    if (!f) return;
+    openVideoPostDialog({ file: f, url: URL.createObjectURL(f), label: f.name });
+    $('vPostFile').value = '';
+  });
   $('uploadMusBtn').addEventListener('click', () => $('musInput').click());
   $('musInput').addEventListener('change', onUploadMus);
   document.querySelectorAll('#musModeSeg .seg-btn').forEach((b) => b.addEventListener('click', () => {
@@ -860,8 +872,73 @@ function renderVideoResults(data) {
       <div class="gate-row">${gateLine}</div>`;
     const row = el('div', 'tile-row');
     const dl = el('a', 'ghost sm dl-link', '⬇ MP4'); dl.href = o.url; dl.download = o.filename;
-    row.appendChild(dl); card.appendChild(row); host.appendChild(card);
+    row.appendChild(dl);
+    // Post: vertical → FB video + IG Reel; wide/square → FB only (Reels want 9:16).
+    const vertical = o.height > o.width;
+    const pb = el('button', 'sm post-one', vertical ? '📣 Post' : '📣 FB only');
+    pb.title = vertical ? 'Facebook video + Instagram Reel' : 'Facebook Page video only — IG Reels need vertical';
+    pb.addEventListener('click', () => openVideoPostDialog({ token: o.token, url: o.url, label: o.label, width: o.width, height: o.height }));
+    row.appendChild(pb);
+    card.appendChild(row); host.appendChild(card);
   });
+}
+
+// ── Post a video (a cut via its token, or a finished upload as-is) ───────────
+function openVideoPostDialog(v) {
+  post.video = v; post.plan = [];
+  $('postImg').classList.add('hidden');
+  const pv = $('postVid'); pv.classList.remove('hidden'); pv.src = v.url;
+  $('postMeta').textContent = v.width ? `${v.label} · ${v.width}×${v.height} · video` : `${v.label} · video`;
+  const applyPlatforms = () => {
+    const vertical = pv.videoHeight ? pv.videoHeight > pv.videoWidth : (v.height || 0) > (v.width || 0);
+    $('pfFb').checked = true; $('pfFb').disabled = false;
+    $('pfIg').checked = vertical; $('pfIg').disabled = !vertical;
+    const planHost = $('postPlan'); planHost.innerHTML = ''; planHost.classList.remove('hidden');
+    planHost.appendChild(el('div', 'post-plan-line', vertical
+      ? '→ Facebook Page video + Instagram Reel (processing runs 1–2 min)'
+      : '→ Facebook Page video only — IG Reels need a vertical (9:16) video'));
+  };
+  $('pfFb').closest('.post-platforms').style.display = '';
+  if (v.width) applyPlatforms(); else pv.addEventListener('loadedmetadata', applyPlatforms, { once: true });
+  $('postCaption').value = ''; $('postCaption').disabled = false; $('postCaption').placeholder = 'Write the caption…';
+  $('captionIdeas').classList.add('hidden'); $('captionIdeas').innerHTML = '';
+  $('suggestSource').textContent = ''; $('suggestBtn').style.display = 'none';
+  setPostStage('compose');
+  $('postDialog').showModal();
+}
+
+async function onVideoPostSend() {
+  const v = post.video;
+  const caption = $('postCaption').value.trim();
+  const platforms = [];
+  if ($('pfFb').checked) platforms.push('facebook');
+  if ($('pfIg').checked && !$('pfIg').disabled) platforms.push('instagram');
+  if (!platforms.length) return toast('Pick at least one platform.', 'err');
+  const mode = post.stage === 'confirm' ? 'send' : 'preview';
+  const btn = $('postSend'); btn.disabled = true;
+  btn.innerHTML = `<span class="spin"></span>${mode === 'send' ? 'Posting… (video can take 2 min)' : 'Checking…'}`;
+  try {
+    let r;
+    if (v.file) {
+      const fd = new FormData();
+      fd.append('video', v.file); fd.append('caption', caption);
+      fd.append('platforms', platforms.join(',')); fd.append('placement', 'feed'); fd.append('mode', mode);
+      r = await (await fetch(`${API}/post-video`, { method: 'POST', body: fd })).json();
+    } else {
+      r = await (await fetch(`${API}/post-video`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoToken: v.token, caption, platforms, placement: 'feed', mode }) })).json();
+    }
+    if (mode === 'preview') {
+      if (!r.ok) throw new Error(r.error || 'preview failed');
+      return setPostStage('confirm');
+    }
+    const results = r.results || {};
+    const bits = Object.entries(results).map(([p, o]) => o.ok ? `${p} ✓` : (o.skipped ? `${p} skipped` : `${p} ✗ FAILED`));
+    const anyFail = Object.values(results).some((o) => !o.ok && !o.skipped) || (!r.ok && !Object.keys(results).length);
+    $('postDialog').close(); setPostStage('compose');
+    toast((anyFail ? '⚠ Partial send — retry ONLY the failed platform: ' : 'Posted 🎉 ') + (bits.join(', ') || r.error || 'sent'), anyFail ? 'err' : 'ok');
+  } catch (e) { toast('Video post failed: ' + e.message, 'err'); setPostStage('compose'); }
+  finally { btn.disabled = false; }
 }
 
 async function onVSaveDrive() {

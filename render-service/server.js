@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.5.4'; // 1.5.4: 3:2 listing derives with blur-fill (July 25 VisitAustin treatment) instead of flat letterbox bars
+const VERSION = '1.6.0'; // 1.6.0: video posting — cuts + finished uploads post to FB Page video / IG Reels via rail v5 (/post-video, /pub/:token.mp4)
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -173,6 +173,13 @@ app.get('/pub/:token.jpg', (req, res) => {
   const entry = social.getPublic(req.params.token);
   if (!entry) return res.status(404).send('gone');
   res.setHeader('Content-Type', entry.type);
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.send(entry.buffer);
+});
+app.get('/pub/:token.mp4', (req, res) => {
+  const entry = social.getPublic(req.params.token);
+  if (!entry || entry.type !== 'video/mp4') return res.status(404).send('gone');
+  res.setHeader('Content-Type', 'video/mp4');
   res.setHeader('Cache-Control', 'public, max-age=3600');
   res.send(entry.buffer);
 });
@@ -577,6 +584,40 @@ app.post('/upload-music', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ ok: false, error: 'file required' });
     res.json({ ok: true, ...(await library.upload('music', req.file.originalname || `track-${Date.now()}.mp3`, req.file.buffer, req.file.mimetype || 'audio/mpeg')) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Post a video to social (rail v5: FB Page video + IG Reel / video story) ──
+// Two sources, one endpoint:
+//   • JSON  { videoToken, caption, platforms?, placement?, mode? } — a cut made
+//     in this tool (its /video-out token), posted without re-encoding.
+//   • multipart video file + same fields — an ALREADY-EDITED video posted
+//     as-is (the Hootsuite path): no hook, no end-card, no gate — it ships
+//     exactly as uploaded.
+// mode 'preview' (default) never touches the platforms; 'send' publishes.
+app.post('/post-video', videoUpload.single('video'), async (req, res) => {
+  try {
+    if (!social.isConfigured()) return res.status(503).json({ ok: false, error: 'SOCIAL_RAIL_KEY not set on the server (Render env).' });
+    const b = req.body || {};
+    let videoBuffer = null, source = null;
+    if (req.file) {
+      videoBuffer = require('fs').readFileSync(req.file.path);
+      require('fs').unlinkSync(req.file.path);
+      source = `upload:${req.file.originalname || 'video'}`;
+    } else if (b.videoToken) {
+      const entry = _videoOut.get(b.videoToken);
+      if (!entry || !require('fs').existsSync(entry.path)) return res.status(404).json({ ok: false, error: 'videoToken unknown or expired — re-cut the clip.' });
+      videoBuffer = require('fs').readFileSync(entry.path);
+      source = 'cut';
+    } else {
+      return res.status(400).json({ ok: false, error: 'provide a video file or a videoToken' });
+    }
+    const platforms = b.platforms ? (Array.isArray(b.platforms) ? b.platforms : String(b.platforms).split(',')) : undefined;
+    const result = await social.postVideo({
+      videoBuffer, caption: b.caption || '', platforms,
+      placement: b.placement || 'feed', mode: b.mode || 'preview',
+    });
+    res.json({ ok: true, source, bytes: videoBuffer.length, ...result });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 

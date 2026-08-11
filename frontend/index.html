@@ -211,6 +211,15 @@
     </section>
 
     <!-- VIDEO RESULTS -->
+    <section class="panel hidden" id="videoPostExisting">
+      <h2 class="step">📤 Post a finished video</h2>
+      <p class="muted">Already edited? Post it as-is — no hook, no end-card, exactly the file you pick. Vertical goes to Facebook + Instagram Reels; wide goes to Facebook only.</p>
+      <div class="actions">
+        <input type="file" id="vPostFile" accept="video/mp4,video/quicktime" class="hidden" />
+        <button id="vPostExistingBtn" class="ghost" type="button">Choose a video to post…</button>
+      </div>
+    </section>
+
     <section class="panel hidden" id="videoResults">
       <h2 class="step">② Your cuts</h2>
       <div id="vSummary" class="summary"></div>
@@ -255,6 +264,7 @@
     <h3>Post to social</h3>
     <div class="post-preview">
       <img id="postImg" alt="" />
+      <video id="postVid" class="hidden" controls muted playsinline preload="metadata"></video>
       <span id="postMeta" class="muted"></span>
     </div>
     <div id="postPlan" class="post-plan hidden"></div>
