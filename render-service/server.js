@@ -248,6 +248,24 @@ app.post('/verify-text', async (req, res) => {
   }
 });
 
+// Drive permission diagnostic — what the SA ITSELF sees on each configured
+// folder (driveId + effective canAddChildren). The owner's ACL view and the
+// SA's effective access can disagree; this is the ground truth.
+app.get('/drive-diag', async (req, res) => {
+  const ids = {
+    flyersRoot: process.env.FLYERS_ROOT_FOLDER_ID,
+    backgrounds: process.env.BG_FOLDER_ID,
+    people: process.env.PEOPLE_FOLDER_ID,
+  };
+  const out = {};
+  for (const [k, id] of Object.entries(ids)) {
+    if (!id) { out[k] = { error: 'no id configured' }; continue; }
+    try { out[k] = await gdrive.getFileMeta(id); }
+    catch (e) { out[k] = { id, error: e.message }; }
+  }
+  res.json({ ok: true, asServiceAccount: true, folders: out });
+});
+
 // ── CREATE step ──────────────────────────────────────────────────────────────
 // List templates + their content fields.
 app.get('/templates', (req, res) => {

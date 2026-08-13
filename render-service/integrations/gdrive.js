@@ -102,6 +102,19 @@ const listImages = (folderId) => listByMime(folderId, 'image/');
 const listVideos = (folderId) => listByMime(folderId, 'video/');
 const listAudio = (folderId) => listByMime(folderId, 'audio/');
 
+// Diagnostic: what the SA itself sees on a file/folder — driveId + effective
+// write capabilities. Ground truth for permission debugging (the owner's ACL
+// view and the SA's effective access can disagree).
+async function getFileMeta(fileId) {
+  const url = `${API}/files/${encodeURIComponent(fileId)}?` + qs({
+    fields: 'id,name,driveId,parents,capabilities(canAddChildren,canEdit),trashed',
+    supportsAllDrives: true,
+  });
+  const res = await httpsRequest('GET', url, await authHeaders());
+  if (res.status !== 200) throw new Error(`Drive meta ${res.status}: ${res.buffer.toString().slice(0, 300)}`);
+  return JSON.parse(res.buffer.toString());
+}
+
 async function downloadFile(fileId) {
   const url = `${API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`;
   const res = await httpsRequest('GET', url, await authHeaders());
@@ -197,4 +210,4 @@ async function getAacmeLogo() {
   return _aacmeLogo;
 }
 
-module.exports = { isConfigured, saveImages, listImages, listVideos, listAudio, downloadFile, uploadImage, resolvePath, getAacmeLogo };
+module.exports = { isConfigured, saveImages, listImages, listVideos, listAudio, downloadFile, uploadImage, resolvePath, getAacmeLogo, getFileMeta };
