@@ -234,6 +234,83 @@ const TEMPLATES = [
     adCopy: genericPaidAdCopy("Breakin' Series", 'https://www.danzversity.com/registration/?utm_source=meta&utm_medium=paid&utm_campaign=breakin-2026'),
   },
 
+  // ----- KPOP / UNI-VERSITY (Style A) -----
+  // Facts from the live /kpop page: 18+, Sundays 4:00–7:00 PM, $70/mo +
+  // one-time $30 commitment fee, all levels, rolling entry.
+  {
+    key: 'kpop-university', label: 'Uni-Versity KPop (18+)', family: 'A', group: 'KPop',
+    defaultUrl: 'https://danzversity.com/kpop',
+    fields: [
+      f('time', 'Day / time', 'SUNDAYS 4:00-7:00PM', 'SUNDAYS 4:00-7:00PM'),
+      f('price', 'Price', '$70/MO', '$70/MO'),
+      f('urgency', 'Urgency', 'ROLLING ENTRY · ALL LEVELS', 'ROLLING ENTRY · ALL LEVELS'),
+    ],
+    body: 'A vivid, high-saturation photo of adult dancers hitting sharp K-Pop choreography in formation in the studio. Dramatic stage lighting, rich color, high contrast. Danzversity teal graffiti logo at top center. The text "UNI-VERSITY" in large Bebas Neue all-caps gold letters. Below that "AUSTIN\'S K-POP CREW · 18+" in white Bebas Neue. The vibrant photo in the middle. A thin gold accent line. The text "{time}" in white. The text "ALL LEVELS WELCOME" in white. The text "{price}" in gold. A gold pill button with "JOIN UNI-VERSITY" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/KPOP" and "7531 BURNET RD · AUSTIN, TX 78757".',
+  },
+
+  // ----- FALL ENROLLMENT (Style A) -----
+  {
+    key: 'fall-enrollment', label: 'Fall Enrollment', family: 'A', group: 'Enrollment',
+    defaultUrl: 'https://danzversity.com/youth',
+    fields: [
+      f('start', 'Start line', 'CLASSES START AUG 18', 'CLASSES START AUG 18'),
+      f('ages', 'Ages', 'AGES 2-17 + ADULTS', 'AGES 2-17 + ADULTS'),
+      f('urgency', 'Urgency', 'LIMITED SPOTS PER CLASS', 'LIMITED SPOTS PER CLASS'),
+    ],
+    body: 'A vivid, high-saturation photo of kids and teens dancing hip hop in the studio, energetic and joyful. Warm studio lighting, rich color, high contrast. Danzversity teal graffiti logo at top center. The text "FALL CLASSES" in large Bebas Neue all-caps gold letters. Below that "{start}" in white Bebas Neue. The vibrant photo in the middle. The text "MORE THAN MOVES — IT\'S CULTURE." in white. A thin gold accent line. The text "{ages}" in white. The text "FIRST CLASS FREE" in gold. A gold pill button with "ENROLL NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/YOUTH" and "7531 BURNET RD · AUSTIN, TX 78757".',
+  },
+
+  // ----- AFTER SCHOOL (B2B — the /after-school page pitches SCHOOLS, not parents) -----
+  {
+    key: 'after-school', label: 'After School — School Partnerships', family: 'A', group: 'Schools',
+    defaultUrl: 'https://danzversity.com/after-school',
+    fields: [
+      f('audience', 'Audience line', 'FOR SCHOOLS · PTAS · DISTRICTS', 'FOR SCHOOLS · PTAS · DISTRICTS'),
+      f('detail', 'Detail line', 'ON-CAMPUS HIP HOP PROGRAMS', 'ON-CAMPUS HIP HOP PROGRAMS'),
+    ],
+    body: 'A vivid, high-saturation photo of elementary school kids dancing hip hop in a school gym, joyful and energetic. Bright natural lighting, rich color, high contrast. Danzversity teal graffiti logo at top center. The text "HIP HOP AFTER SCHOOL" in large Bebas Neue all-caps gold letters. Below that "{audience}" in white Bebas Neue. The vibrant photo in the middle. The text "MORE THAN MOVES — IT\'S CULTURE." in white. A thin gold accent line. The text "{detail}" in white. The text "TAUGHT BY WORKING ARTISTS" in white. A gold pill button with "PARTNER WITH US" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/AFTER-SCHOOL" and "7531 BURNET RD · AUSTIN, TX 78757".',
+  },
+
+  // ----- SHOWCASE (Style B) -----
+  {
+    key: 'showcase', label: 'Showcase', family: 'B', group: 'Events',
+    defaultUrl: 'https://danzversity.com',
+    fields: [
+      f('name', 'Showcase name', 'FALL SHOWCASE', '', true),
+      f('datetime', 'Date | time', 'SAT DEC 13 | 6PM', '', true),
+      f('admission', 'Admission', 'FREE · ALL WELCOME', 'FREE · ALL WELCOME'),
+    ],
+    body: 'The text "{name}" in large bold letters at top with warm stage-light glow. Silhouettes of dancers mid-performance under dramatic spotlights, confetti and energy. The text "{datetime}" in white. The text "{admission}" in a gold pill. The text "COME SEE WHAT THEY\'VE BUILT" in gold. At bottom, two lines of white small caps: "DANZVERSITY.COM" and "7531 BURNET RD · AUSTIN, TX 78757".',
+  },
+
+  // ----- ANNOUNCEMENT (generic escape hatch, Style A) -----
+  {
+    key: 'announcement', label: 'Announcement — Custom', family: 'A', group: 'Announcements',
+    defaultUrl: 'https://danzversity.com',
+    fields: [
+      f('headline', 'Headline', 'SCHEDULE UPDATE', '', true),
+      f('subhead', 'Subline', 'STARTING SEPTEMBER 1', ''),
+      f('detail1', 'Detail line 1', 'ADULT CLASSES NOW MON-THU 7:00PM', ''),
+      f('detail2', 'Detail line 2', '', ''),
+      f('cta', 'Button text', 'LEARN MORE', 'LEARN MORE'),
+    ],
+    body: 'A vivid, high-saturation photo of the Danzversity studio space with warm dramatic lighting. Rich color, high contrast. Danzversity teal graffiti logo at top center. The text "{headline}" in large Bebas Neue all-caps gold letters. Below that "{subhead}" in white Bebas Neue. The vibrant photo in the middle. A thin gold accent line. The text "{detail1}" in white. The text "{detail2}" in white. A gold pill button with "{cta}" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM" and "7531 BURNET RD · AUSTIN, TX 78757".',
+  },
+
+  // ----- REFERRAL (Style A) -----
+  // Honest by construction: first class free is true for everyone; the share
+  // link lives on the portal Profile tab. No credit amount is promised here —
+  // the reward line is editable once Tony finalizes referral reward terms.
+  {
+    key: 'referral', label: 'Refer a Friend', family: 'A', group: 'Social',
+    defaultUrl: 'https://danzversity.com/portal',
+    fields: [
+      f('reward', 'Reward line', 'THEIR FIRST CLASS IS FREE', 'THEIR FIRST CLASS IS FREE'),
+      f('how', 'How line', 'SHARE YOUR LINK FROM YOUR PORTAL', 'SHARE YOUR LINK FROM YOUR PORTAL'),
+    ],
+    body: 'A vivid, high-saturation photo of two friends laughing and dancing together in the studio. Warm joyful lighting, rich color, high contrast. Danzversity teal graffiti logo at top center. The text "BRING A FRIEND" in large Bebas Neue all-caps gold letters. Below that "{reward}" in white Bebas Neue. The vibrant photo in the middle. The text "MORE THAN MOVES — IT\'S CULTURE." in white. A thin gold accent line. The text "{how}" in white. A gold pill button with "OPEN YOUR PORTAL" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/PORTAL" and "7531 BURNET RD · AUSTIN, TX 78757".',
+  },
+
   // ----- (YOU)NITY NIGHTS (Style B) -----
   {
     key: 'younity-nights', label: '(You)nity Nights', family: 'B', group: '(You)nity',
@@ -384,6 +461,12 @@ const CHASSIS = {
   'adult-paid': { layout: 'A-Lite', headline: 'ADULT HIP HOP', subhead: 'FIRST CLASS FREE · NO EXPERIENCE NEEDED', url: 'DANZVERSITY.COM/ADULTS', qr: false },
   'breakin': { layout: 'A', kicker: PROOF_KICKER, headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM', infoLines: ['{time}', '{ages}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/BREAKIN', qr: true },
   'breakin-paid': { layout: 'A-Lite', headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM · {time}', url: 'DANZVERSITY.COM/BREAKIN', qr: false },
+  'kpop-university': { layout: 'A', kicker: PROOF_KICKER, headline: 'UNI-VERSITY', subhead: "AUSTIN'S K-POP CREW · 18+", tagline: 'PART CLASS · PART CREW · ALL LEVELS', infoLines: ['{time}'], price: '{price}', urgency: '{urgency}', cta: 'JOIN UNI-VERSITY', url: 'DANZVERSITY.COM/KPOP', qr: true },
+  'fall-enrollment': { layout: 'A', kicker: PROOF_KICKER, headline: 'FALL CLASSES', subhead: '{start}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{ages}'], price: 'FIRST CLASS FREE', urgency: '{urgency}', cta: 'ENROLL NOW', url: 'DANZVERSITY.COM/YOUTH', qr: true },
+  'after-school': { layout: 'A', kicker: PROOF_KICKER, headline: 'HIP HOP AFTER SCHOOL', subhead: '{audience}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{detail}', 'TAUGHT BY WORKING ARTISTS'], cta: 'PARTNER WITH US', url: 'DANZVERSITY.COM/AFTER-SCHOOL', qr: true },
+  'showcase': { layout: 'B', kicker: PROOF_KICKER, headline: '{name}', subhead: '{datetime}', tagline: "COME SEE WHAT THEY'VE BUILT", infoLines: ['{admission}'], cta: 'RSVP', qrLabel: 'SCAN TO RSVP', url: 'DANZVERSITY.COM', qr: true },
+  'announcement': { layout: 'A', kicker: PROOF_KICKER, headline: '{headline}', subhead: '{subhead}', infoLines: ['{detail1}', '{detail2}'], cta: '{cta}', url: 'DANZVERSITY.COM', qr: true },
+  'referral': { layout: 'A', kicker: PROOF_KICKER, headline: 'BRING A FRIEND', subhead: '{reward}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{how}'], cta: 'OPEN YOUR PORTAL', qrLabel: 'SCAN TO SHARE', url: 'DANZVERSITY.COM/PORTAL', qr: true },
   'younity-nights': { layout: 'B', kicker: 'FREE · ALL AGES · VISITORS WELCOME', headline: '(YOU)NITY NIGHTS', subhead: '{date} · {time}', tagline: '{lineup}', compliance: AACME_STATEMENT, cta: 'RSVP — FREE', qrLabel: 'SCAN TO RSVP', url: 'DANZVERSITY.COM', qr: true },
   'workshop-internal': { layout: 'A', kicker: PROOF_KICKER, headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },
   'workshop-nametalent': { layout: 'B', kicker: PROOF_KICKER, headline: '{name}', subhead: 'WITH {instructor}', infoLines: ['{datetime}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM', qr: true },

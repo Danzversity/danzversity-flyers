@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.7.0'; // 1.7.0: per-level youth templates (Root Runners / Flow Finders / Vibe Builders / Elementz Crew) + one-entry-per-product dropdown with a Regular post | Paid ad toggle
+const VERSION = '1.8.0'; // 1.8.0: six coverage templates — Uni-Versity KPop, Fall Enrollment, After School (B2B), Showcase, Announcement (generic), Refer a Friend
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
