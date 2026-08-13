@@ -152,7 +152,7 @@ async function uploadImage(folderId, name, buffer, mimeType = 'image/png') {
   const url = `${UPLOAD}/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,webViewLink`;
   const res = await httpsRequest('POST', url,
     await authHeaders({ 'Content-Type': `multipart/related; boundary=${boundary}`, 'Content-Length': body.length }), body);
-  if (res.status !== 200) throw new Error(`Drive upload ${res.status}: ${res.buffer.toString().slice(0, 150)}`);
+  if (res.status !== 200) throw new Error(`Drive upload ${res.status} (parent ${folderId}): ${res.buffer.toString().slice(0, 800)}`);
   return JSON.parse(res.buffer.toString());
 }
 
