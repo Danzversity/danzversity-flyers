@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.6.0'; // 1.6.0: video posting — cuts + finished uploads post to FB Page video / IG Reels via rail v5 (/post-video, /pub/:token.mp4)
+const VERSION = '1.7.0'; // 1.7.0: per-level youth templates (Root Runners / Flow Finders / Vibe Builders / Elementz Crew) + one-entry-per-product dropdown with a Regular post | Paid ad toggle
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';

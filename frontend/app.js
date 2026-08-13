@@ -16,6 +16,9 @@ const create = {
   // mismatched default here once shipped a full-bleed flyer while the UI
   // showed "Photo on background" (init bailed mid-deploy before correcting it).
   templates: [], backgrounds: [], people: [], selectedBg: null, bgFile: null, selectedPersonId: null, photoFile: null, mode: 'scene',
+  // paidMode: the "Use for" toggle. The dropdown lists one entry per product;
+  // when true, currentTemplate() resolves to the product's paid (A-Lite) variant.
+  paidMode: false,
   style: { font: 'classic', accent: 'gold', headline: 'accent' },
   styleOptions: null, bgVibes: [],
   aiBgs: [], selectedAiIdx: null, // session-only Ideogram background candidates
@@ -105,6 +108,7 @@ async function initCreate() {
   $('bgInput').addEventListener('change', onUploadBg);
   $('addPhotoBtn').addEventListener('click', () => $('photoInput').click());
   $('photoInput').addEventListener('change', onPickPhoto);
+  document.querySelectorAll('#channelToggle .seg-btn').forEach((b) => b.addEventListener('click', () => setChannel(b.dataset.channel)));
   document.querySelectorAll('#modeToggle .seg-btn').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
   document.querySelectorAll('#headlineToggle .seg-btn').forEach((b) => b.addEventListener('click', () => setStyle({ headline: b.dataset.headline })));
   $('variantsBtn').addEventListener('click', onVariants);
@@ -129,11 +133,13 @@ async function initCreate() {
   buildStyleRow();
   buildVibeSelect();
   const sel = $('tplSelect');
-  const groups = {}; create.templates.forEach((t) => { (groups[t.group] = groups[t.group] || []).push(t); });
+  // One entry per PRODUCT: paid (A-Lite) variants stay out of the dropdown and
+  // are reached via the "Use for: Paid ad" toggle instead.
+  const groups = {}; create.templates.filter((t) => t.channel !== 'paid').forEach((t) => { (groups[t.group] = groups[t.group] || []).push(t); });
   sel.innerHTML = '';
   Object.keys(groups).forEach((g) => {
     const og = document.createElement('optgroup'); og.label = g;
-    groups[g].forEach((t) => { const o = document.createElement('option'); o.value = t.key; o.textContent = t.label + (t.channel === 'paid' ? '  ·  paid' : ''); og.appendChild(o); });
+    groups[g].forEach((t) => { const o = document.createElement('option'); o.value = t.key; o.textContent = t.label; og.appendChild(o); });
     sel.appendChild(og);
   });
   onTemplateChange();
@@ -189,21 +195,54 @@ function renderLookChips() {
   $('lookChips').classList.toggle('hidden', !getLooks().length);
 }
 
-function currentTemplate() { return create.templates.find((t) => t.key === $('tplSelect').value); }
+function baseTemplate() { return create.templates.find((t) => t.key === $('tplSelect').value); }
+function currentTemplate() {
+  const b = baseTemplate(); if (!b) return b;
+  if (create.paidMode && b.paidKey) return create.templates.find((t) => t.key === b.paidKey) || b;
+  return b;
+}
 
-function onTemplateChange() {
+function setChannel(ch) {
+  create.paidMode = ch === 'paid';
+  document.querySelectorAll('#channelToggle .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.channel === ch));
+  // Same product, different channel — keep what's typed (matching field names).
+  onTemplateChange({ preserve: true });
+}
+
+function onTemplateChange(opts = {}) {
+  const base = baseTemplate(); if (!base) return;
+  // Products without a paid variant only make regular posts — hide the toggle
+  // and make sure a leftover paid selection can't stick.
+  if (!base.paidKey && create.paidMode) {
+    create.paidMode = false;
+    document.querySelectorAll('#channelToggle .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.channel === 'post'));
+  }
+  $('channelRow').classList.toggle('hidden', !base.paidKey);
   const t = currentTemplate(); if (!t) return;
   $('ctaUrl').value = t.defaultUrl || ''; checkUrl(t.defaultUrl);
-  const host = $('tplFields'); host.innerHTML = '';
+  // Only the post/paid toggle preserves values (same product, same facts).
+  // A product switch must NOT — one template's defaults would leak into the
+  // next product's fields.
+  const host = $('tplFields');
+  const prev = {};
+  if (opts.preserve) host.querySelectorAll('input').forEach((i) => { if (i.value.trim()) prev[i.id] = i.value; });
+  host.innerHTML = '';
+  // Paid variants are generic (one A-Lite ad serves several products) — seed
+  // their fields from the SELECTED product's defaults so e.g. Root Runners'
+  // paid ad says AGES 2-4, not the generic youth AGES 2-17.
+  const baseDefaults = {};
+  if (t !== base) base.fields.forEach((f) => { if (f.default) baseDefaults[f.name] = f.default; });
   t.fields.forEach((fld) => {
     const lab = el('label', 'field');
     lab.appendChild(document.createTextNode(fld.label + (fld.required ? ' *' : '')));
-    const inp = el('input'); inp.type = 'text'; inp.id = 'fld_' + fld.name; inp.placeholder = fld.placeholder || ''; if (fld.default) inp.value = fld.default;
+    const inp = el('input'); inp.type = 'text'; inp.id = 'fld_' + fld.name; inp.placeholder = fld.placeholder || '';
+    inp.value = prev['fld_' + fld.name] || baseDefaults[fld.name] || fld.default || '';
     lab.appendChild(inp); host.appendChild(lab);
   });
   const paid = t.channel === 'paid';
   $('qrToggle').checked = !paid; $('qrToggle').disabled = paid;
-  $('composeHint').textContent = paid ? 'paid → photo-dominant, minimal text, no QR' : '';
+  $('channelHint').textContent = paid ? 'photo-dominant, minimal text, no QR' : '';
+  $('composeHint').textContent = paid ? 'paid ad → photo-dominant, minimal text, no QR' : '';
 }
 
 function collectContent() {

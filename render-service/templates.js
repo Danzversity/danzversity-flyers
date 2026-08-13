@@ -153,6 +153,44 @@ const TEMPLATES = [
     fields: [f('ages', 'Ages', 'AGES 2-17', 'AGES 2-17')],
     body: 'A vivid, high-saturation photo of kids and teens dancing in the studio. Warm studio lighting, rich color, high contrast. Danzversity teal graffiti logo at top center. The text "HIP HOP DANCE" in large Bebas Neue all-caps gold letters. Below that "{ages}" in white Bebas Neue. The vibrant photo in the middle. The text "MORE THAN MOVES — IT\'S CULTURE." in white. A thin gold accent line. The text "ROOT RUNNERS • FLOW FINDERS • VIBE BUILDERS • ELEMENTZ CREW" in white. A gold pill button with "ENROLL NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/YOUTH" and "7531 BURNET RD · AUSTIN, TX 78757".',
   },
+  // Per-level youth templates (added 8/13) — one campaign per age group, plus
+  // the combined All Ages above. Age bands mirror the live site level pages.
+  {
+    key: 'youth-rootrunners', label: 'Youth — Root Runners (Ages 2–4)', family: 'A', group: 'Youth',
+    defaultUrl: 'https://danzversity.com/youth/root-runners',
+    fields: [
+      f('ages', 'Ages', 'AGES 2-4', 'AGES 2-4'),
+      f('time', 'Day / time', 'SATURDAYS 9AM', ''),
+    ],
+    body: 'A vivid, high-saturation photo of happy toddlers moving and playing in a dance studio. Warm studio lighting, rich color, high contrast. Danzversity teal graffiti logo at top center. The text "ROOT RUNNERS" in large Bebas Neue all-caps gold letters. Below that "TODDLER HIP HOP · {ages}" in white Bebas Neue. The vibrant photo in the middle. The text "MORE THAN MOVES — IT\'S CULTURE." in white. A thin gold accent line. The text "FIRST CLASS FREE" in white. A gold pill button with "ENROLL NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/YOUTH" and "7531 BURNET RD · AUSTIN, TX 78757".',
+  },
+  {
+    key: 'youth-flowfinders', label: 'Youth — Flow Finders (Ages 5–7)', family: 'A', group: 'Youth',
+    defaultUrl: 'https://danzversity.com/youth/flow-finders',
+    fields: [
+      f('ages', 'Ages', 'AGES 5-7', 'AGES 5-7'),
+      f('time', 'Day / time', 'TUESDAYS 5PM', ''),
+    ],
+    body: 'A vivid, high-saturation photo of young kids dancing hip hop in the studio. Warm studio lighting, rich color, high contrast. Danzversity teal graffiti logo at top center. The text "FLOW FINDERS" in large Bebas Neue all-caps gold letters. Below that "KIDS HIP HOP · {ages}" in white Bebas Neue. The vibrant photo in the middle. The text "MORE THAN MOVES — IT\'S CULTURE." in white. A thin gold accent line. The text "FIRST CLASS FREE" in white. A gold pill button with "ENROLL NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/YOUTH" and "7531 BURNET RD · AUSTIN, TX 78757".',
+  },
+  {
+    key: 'youth-vibebuilders', label: 'Youth — Vibe Builders (Ages 8–12)', family: 'A', group: 'Youth',
+    defaultUrl: 'https://danzversity.com/youth/vibe-builders',
+    fields: [
+      f('ages', 'Ages', 'AGES 8-12', 'AGES 8-12'),
+      f('time', 'Day / time', 'WEDNESDAYS 6PM', ''),
+    ],
+    body: 'A vivid, high-saturation photo of kids dancing hip hop with confidence in the studio. Warm studio lighting, rich color, high contrast. Danzversity teal graffiti logo at top center. The text "VIBE BUILDERS" in large Bebas Neue all-caps gold letters. Below that "KIDS HIP HOP · {ages}" in white Bebas Neue. The vibrant photo in the middle. The text "MORE THAN MOVES — IT\'S CULTURE." in white. A thin gold accent line. The text "FIRST CLASS FREE" in white. A gold pill button with "ENROLL NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/YOUTH" and "7531 BURNET RD · AUSTIN, TX 78757".',
+  },
+  {
+    key: 'youth-elementzcrew', label: 'Youth — Elementz Crew (Ages 13–17)', family: 'A', group: 'Youth',
+    defaultUrl: 'https://danzversity.com/youth/elementz-crew',
+    fields: [
+      f('ages', 'Ages', 'AGES 13-17', 'AGES 13-17'),
+      f('time', 'Day / time', 'THURSDAYS 6PM', ''),
+    ],
+    body: 'A vivid, high-saturation photo of teens performing hip hop choreography under dramatic stage lighting in the studio. Rich color, high contrast. Danzversity teal graffiti logo at top center. The text "ELEMENTZ CREW" in large Bebas Neue all-caps gold letters. Below that "TEEN HIP HOP · {ages}" in white Bebas Neue. The vibrant photo in the middle. The text "MORE THAN MOVES — IT\'S CULTURE." in white. A thin gold accent line. The text "FIRST CLASS FREE" in white. A gold pill button with "ENROLL NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/YOUTH" and "7531 BURNET RD · AUSTIN, TX 78757".',
+  },
   {
     key: 'youth-paid', label: 'Youth — Paid 🔥', family: 'A-Lite', group: 'Youth',
     defaultUrl: 'https://www.danzversity.com/registration/',
@@ -284,10 +322,26 @@ const TEMPLATES = [
 // ── Lookups + token expansion ────────────────────────────────────────────────
 const byKey = Object.fromEntries(TEMPLATES.map((t) => [t.key, t]));
 
+// Which paid (A-Lite) template serves as a product's ad variant. The frontend
+// shows ONE dropdown entry per product plus a "Regular post | Paid ad" toggle
+// that resolves through this map — paid templates never appear in the dropdown.
+const PAID_VARIANTS = {
+  'summer-camp-evergreen': 'summer-camp-paid',
+  'summer-camp-perweek': 'summer-camp-paid',
+  'youth-allages': 'youth-paid',
+  'youth-rootrunners': 'youth-paid',
+  'youth-flowfinders': 'youth-paid',
+  'youth-vibebuilders': 'youth-paid',
+  'youth-elementzcrew': 'youth-paid',
+  'adult': 'adult-paid',
+  'breakin': 'breakin-paid',
+};
+
 function listTemplates() {
   return TEMPLATES.map((t) => ({
     key: t.key, label: t.label, family: t.family, group: t.group,
     channel: t.family === 'A-Lite' ? 'paid' : 'organic',
+    paidKey: PAID_VARIANTS[t.key] || null,
     defaultUrl: t.defaultUrl,
     fields: t.fields,
     hasAdCopy: !!t.adCopy,
@@ -321,6 +375,10 @@ const CHASSIS = {
   'summer-camp-perweek': { layout: 'A', kicker: PROOF_KICKER, headline: 'HIP HOP SUMMER CAMP', subhead: '{weekLine}', tagline: '{benefit}', infoLines: ['{ages} · WITH {instructor}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/CAMPS', qr: true },
   'summer-camp-paid': { layout: 'A-Lite', headline: 'HIP HOP SUMMER CAMP', subhead: '{ages} · TAUGHT BY {instructor}', url: 'DANZVERSITY.COM/CAMPS', qr: false },
   'youth-allages': { layout: 'A', kicker: PROOF_KICKER, headline: 'HIP HOP DANCE', subhead: '{ages}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['ROOT RUNNERS • FLOW FINDERS', 'VIBE BUILDERS • ELEMENTZ CREW'], price: 'FIRST CLASS FREE', cta: 'ENROLL NOW', url: 'DANZVERSITY.COM/YOUTH', qr: true },
+  'youth-rootrunners': { layout: 'A', kicker: PROOF_KICKER, headline: 'ROOT RUNNERS', subhead: 'TODDLER HIP HOP · {ages}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{time}'], price: 'FIRST CLASS FREE', cta: 'ENROLL NOW', url: 'DANZVERSITY.COM/YOUTH', qr: true },
+  'youth-flowfinders': { layout: 'A', kicker: PROOF_KICKER, headline: 'FLOW FINDERS', subhead: 'KIDS HIP HOP · {ages}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{time}'], price: 'FIRST CLASS FREE', cta: 'ENROLL NOW', url: 'DANZVERSITY.COM/YOUTH', qr: true },
+  'youth-vibebuilders': { layout: 'A', kicker: PROOF_KICKER, headline: 'VIBE BUILDERS', subhead: 'KIDS HIP HOP · {ages}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{time}'], price: 'FIRST CLASS FREE', cta: 'ENROLL NOW', url: 'DANZVERSITY.COM/YOUTH', qr: true },
+  'youth-elementzcrew': { layout: 'A', kicker: PROOF_KICKER, headline: 'ELEMENTZ CREW', subhead: 'TEEN HIP HOP · {ages}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{time}'], price: 'FIRST CLASS FREE', cta: 'ENROLL NOW', url: 'DANZVERSITY.COM/YOUTH', qr: true },
   'youth-paid': { layout: 'A-Lite', headline: 'HIP HOP DANCE CLASSES', subhead: '{ages} · TAUGHT BY {instructor}', url: 'DANZVERSITY.COM/YOUTH', qr: false },
   'adult': { layout: 'A', kicker: PROOF_KICKER, headline: 'ADULT HIP HOP', subhead: 'NO EXPERIENCE NEEDED', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['FIRST CLASS FREE'], price: '{price}', cta: 'START YOUR JOURNEY', url: 'DANZVERSITY.COM/ADULTS', qr: true },
   'adult-paid': { layout: 'A-Lite', headline: 'ADULT HIP HOP', subhead: 'FIRST CLASS FREE · NO EXPERIENCE NEEDED', url: 'DANZVERSITY.COM/ADULTS', qr: false },
@@ -383,6 +441,6 @@ function buildChassis(key, content = {}) {
 
 module.exports = {
   PALETTE, NEGATIVE_PROMPT, OPENERS, STYLE_REFS, ADDRESS, CAMP_WEEKS,
-  TEMPLATES, byKey, listTemplates, expandContent,
+  TEMPLATES, byKey, listTemplates, expandContent, PAID_VARIANTS,
   CHASSIS, FOOTER_ADDRESS, buildChassis,
 };
