@@ -381,12 +381,20 @@ async function gatherComposeInputs(req) {
     throw { status: 400, message: 'Conflicting inputs: full-bleed mode with a background attached. Your page is outdated — reload it and compose again.' };
   }
 
+  // Library saves are best-effort (the flyer still renders), but a failure is
+  // REPORTED, never swallowed — the SA's Drive-write 403 made every requested
+  // save vanish silently while the checkbox claimed it would keep the image.
+  const saves = { photo: null, background: null }; // null = save not requested
+
   // Gather the photo (uploaded, optionally saved to library, OR a library person).
   let photoBuf = null;
   const photoUp = req.files && req.files.photo && req.files.photo[0];
   if (photoUp) {
     photoBuf = photoUp.buffer;
-    if (req.body.savePhoto === 'true') { try { await library.upload('people', photoUp.originalname || `photo-${Date.now()}.png`, photoUp.buffer, photoUp.mimetype || 'image/png'); } catch (_) { /* non-fatal */ } }
+    if (req.body.savePhoto === 'true') {
+      try { await library.upload('people', photoUp.originalname || `photo-${Date.now()}.png`, photoUp.buffer, photoUp.mimetype || 'image/png'); saves.photo = 'saved'; }
+      catch (e) { saves.photo = 'failed'; console.error('savePhoto to library failed:', e.message); }
+    }
   } else if (req.body.personId) {
     photoBuf = await library.get('people', req.body.personId);
   }
@@ -396,7 +404,10 @@ async function gatherComposeInputs(req) {
   const bgUp = req.files && req.files.background && req.files.background[0];
   if (bgUp) {
     plateBuf = bgUp.buffer;
-    if (req.body.saveBg === 'true') { try { await library.upload('backgrounds', bgUp.originalname || `bg-${Date.now()}.png`, bgUp.buffer, bgUp.mimetype || 'image/png'); } catch (_) { /* non-fatal */ } }
+    if (req.body.saveBg === 'true') {
+      try { await library.upload('backgrounds', bgUp.originalname || `bg-${Date.now()}.png`, bgUp.buffer, bgUp.mimetype || 'image/png'); saves.background = 'saved'; }
+      catch (e) { saves.background = 'failed'; console.error('saveBg to library failed:', e.message); }
+    }
   } else if (req.body.backgroundId) {
     plateBuf = await library.get('backgrounds', req.body.backgroundId);
   }
@@ -417,6 +428,7 @@ async function gatherComposeInputs(req) {
   const used = {
     background: mode === 'photo' ? null : (bgUp ? (bgUp.originalname || 'upload') : req.body.backgroundId),
     photo: photoUp ? (photoUp.originalname || 'upload') : (req.body.personId || null),
+    saves, // 'saved' | 'failed' | null per asset — the frontend warns on 'failed'
   };
   return { templateKey, content, style, mode, background, person, used, backgroundId: req.body.backgroundId || null };
 }

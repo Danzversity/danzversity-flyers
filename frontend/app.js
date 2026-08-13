@@ -520,11 +520,22 @@ function renderResults(data) {
   if (data.used) {
     if (data.used.background) usedLine += ` · bg: ${assetName(create.backgrounds, data.used.background)}`;
     usedLine += ` · photo: ${data.used.photo ? assetName(create.people, data.used.photo) : '<b>none</b>'}`;
+    const s = data.used.saves || {};
+    if (s.background === 'saved' || s.photo === 'saved') usedLine += ' · saved to library ✓';
   }
 
   $('resultsPanel').classList.remove('hidden');
   $('summary').innerHTML = `<b>${state.template}</b>${usedLine} · ${state.images.length} images (${organic} organic, ${paid} paid) · ${data.renderMs} ms`;
   const warn = $('warnings'); warn.innerHTML = ''; (data.warnings || []).forEach((w) => warn.appendChild(el('div', 'note note-warn', '⚠ ' + w)));
+  // A requested library save that failed must be LOUD — otherwise the image is
+  // gone next session while the checkbox claimed it would be kept.
+  const s = (data.used && data.used.saves) || {};
+  ['background', 'photo'].forEach((k) => {
+    if (s[k] === 'failed') {
+      warn.appendChild(el('div', 'note note-warn', `⚠ The ${k} did NOT save to the library (Drive write failed) — it will be gone next session. Download it now, or drop it into the Drive folder by hand.`));
+      toast(`Save to library FAILED for the ${k} — see the warning above the results.`, 'err');
+    }
+  });
   $('cntOrganic').textContent = organic; $('cntPaid').textContent = paid;
   setDriveBadge(data.driveConfigured);
   $('saveDrive').disabled = !data.driveConfigured; $('saveDrive').title = data.driveConfigured ? '' : 'Set GOOGLE_SERVICE_ACCOUNT on the server';
