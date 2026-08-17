@@ -136,7 +136,9 @@ function svgStyleA(W, H, spec, opts = {}, boxes = []) {
     const uw = Math.min(Math.round(W * 1.00), Math.max(Math.round(W * 0.425), spec.urgency.length * Math.round(W * 0.01775) + Math.round(W * 0.075)), qrCap);
     const uy = y - uh;
     L.push(`<rect x="${cx - uw / 2}" y="${uy}" width="${uw}" height="${uh}" rx="${uh / 2}" fill="#000000" fill-opacity="0.35" stroke="${A}" stroke-width="${Math.max(2, F(0.0032))}"/>`);
-    L.push(t(spec.urgency, uy + uh * 0.66, F(0.0235), A, { ls: 1.5 }));
+    // maxW: long badge text (e.g. a credential) shrinks INTO the pill instead of
+    // overflowing it — short text renders at its natural size (byte-identical).
+    L.push(t(spec.urgency, uy + uh * 0.66, F(0.0235), A, { ls: 1.5, maxW: uw * 0.92 }));
     boxes.push({ name: 'urgency', x: cx - uw / 2, y: uy, w: uw, h: uh });
     y = uy - F(0.024);
   }
@@ -155,11 +157,17 @@ function svgALite(W, H, spec) {
   const cx = W / 2, F = (f) => Math.round(H * f);
   const style = resolveStyle(spec);
   const A = style.accent;
-  const t = (s, y, size, fill, o = {}) => `<text x="${cx}" y="${y}" font-size="${size}" fill="${fill}" text-anchor="middle" letter-spacing="${o.ls || 1}"${o.font ? ` style="font-family:'${esc(o.font)}'"` : ''}>${esc(s)}</text>`;
-  const hFont = style.font.family !== 'Bebas Neue' ? { font: style.font.family } : {};
+  const t = (s, y, size, fill, o = {}) => {
+    const ls = o.ls || 1;
+    let sz = size;
+    // Same overflow-shrink as layout A: long lines fit, short lines byte-identical.
+    if (o.maxW) { const est = String(s).length * (sz * (o.wf || 0.56) + ls); if (est > o.maxW) sz = Math.floor(sz * o.maxW / est); }
+    return `<text x="${cx}" y="${y}" font-size="${sz}" fill="${fill}" text-anchor="middle" letter-spacing="${ls}"${o.font ? ` style="font-family:'${esc(o.font)}'"` : ''}>${esc(s)}</text>`;
+  };
+  const hFont = style.font.family !== 'Bebas Neue' ? { font: style.font.family, wf: style.font.widthFactor } : {};
   const L = [`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`, defs(F(0.20), F(0.72), style.font)];
-  if (spec.headline) L.push(t(spec.headline, F(0.855), Math.round(F(0.058) * style.font.scale), style.white ? WHT : A, hFont));
-  if (spec.subhead) L.push(t(spec.subhead, F(0.900), F(0.028), WHT));
+  if (spec.headline) L.push(t(spec.headline, F(0.855), Math.round(F(0.058) * style.font.scale), style.white ? WHT : A, { maxW: W * 0.92, ...hFont }));
+  if (spec.subhead) L.push(t(spec.subhead, F(0.900), F(0.028), WHT, { maxW: W * 0.90 }));
   if (spec.url) L.push(t(`${spec.url}  ·  ${spec.address || ''}`.trim().replace(/·\s*$/, ''), F(0.950), F(0.020), WHT, { ls: 1.5 }));
   // thin accent bar at very bottom — single brand touch for paid
   L.push(`<rect x="0" y="${H - Math.max(4, F(0.008))}" width="100%" height="${Math.max(4, F(0.008))}" fill="${A}"/>`);

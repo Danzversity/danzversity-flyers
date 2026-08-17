@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.8.2'; // 1.8.2: portrait photos in scene mode render WHOLE with blur-fill gutters (no more headless cover-crops); compose warns + suggests Cutout
+const VERSION = '1.9.0'; // 1.9.0: Bboy Wicket on the breakin templates — instructor line + gold RED BULL BC ONE JUDGE credential badge (urgency slot); badge/subhead text auto-shrinks to fit
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
