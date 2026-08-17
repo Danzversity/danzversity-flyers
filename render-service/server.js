@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.8.0'; // 1.8.0: six coverage templates — Uni-Versity KPop, Fall Enrollment, After School (B2B), Showcase, Announcement (generic), Refer a Friend
+const VERSION = '1.8.1'; // 1.8.1: breakin program length is a field (8-WEEK hardcode removed); breakin defaults refreshed to the live 12-week fall series
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';

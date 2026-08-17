@@ -215,22 +215,29 @@ const TEMPLATES = [
   },
 
   // ----- BREAKIN' -----
+  // Program length is a FIELD, not a hardcode (8/14: an 8-week hardcode shipped
+  // under Tony's typed "$360 / 12 WEEKS"). Defaults mirror the live /breakin
+  // page: 12-week fall series, Wednesdays 5:45-6:45PM, ages 8-17, $360.
   {
     key: 'breakin', label: "Breakin' Series", family: 'A', group: "Breakin'",
     defaultUrl: 'https://danzversity.com/breakin',
     fields: [
-      f('time', 'Day / time', 'MONDAYS 6PM', 'MONDAYS'),
-      f('ages', 'Ages', 'AGES 8+', 'ALL AGES'),
-      f('price', 'Price', '$160 / 8 WEEKS', '$160 / 8 WEEKS'),
+      f('length', 'Program length', '12-WEEK PROGRAM', '12-WEEK PROGRAM'),
+      f('time', 'Day / time', 'WEDNESDAYS 5:45-6:45PM', 'WEDNESDAYS 5:45-6:45PM'),
+      f('ages', 'Ages', 'AGES 8-17', 'AGES 8-17'),
+      f('price', 'Price', '$360 / 12 WEEKS', '$360 / 12 WEEKS'),
       f('urgency', 'Urgency', 'SPACE IS LIMITED', 'SPACE IS LIMITED'),
     ],
-    body: 'A vivid, high-saturation photo of a b-boy in freeze pose in the studio. Dramatic lighting, rich color, high contrast. Danzversity teal graffiti logo at top center. The text "BREAKIN\' SERIES" in large Bebas Neue all-caps gold letters. Below that "8-WEEK PROGRAM" in white. The vibrant photo in the middle. A thin gold accent line. The text "{time}" in white. The text "{ages}" in white. The text "{price}" in gold. A gold pill button with "REGISTER NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/BREAKIN" and "7531 BURNET RD · AUSTIN, TX 78757".',
+    body: 'A vivid, high-saturation photo of a b-boy in freeze pose in the studio. Dramatic lighting, rich color, high contrast. Danzversity teal graffiti logo at top center. The text "BREAKIN\' SERIES" in large Bebas Neue all-caps gold letters. Below that "{length}" in white. The vibrant photo in the middle. A thin gold accent line. The text "{time}" in white. The text "{ages}" in white. The text "{price}" in gold. A gold pill button with "REGISTER NOW" in black Bebas Neue. At bottom, two lines of white small caps: "DANZVERSITY.COM/BREAKIN" and "7531 BURNET RD · AUSTIN, TX 78757".',
   },
   {
     key: 'breakin-paid', label: "Breakin' — Paid 🔥", family: 'A-Lite', group: "Breakin'",
     defaultUrl: 'https://www.danzversity.com/registration/',
-    fields: [f('time', 'Day', 'MONDAYS', 'MONDAYS')],
-    body: 'A vivid, high-saturation photo of a b-boy in freeze pose in the studio. Dramatic lighting, rich color, high contrast. The photo fills approximately 70% of the canvas. Centered at the top: small Danzversity teal graffiti logo. The vibrant photo in the middle. Below the photo, on three clean lines: "BREAKIN\' SERIES" in large Bebas Neue all-caps gold letters; "8-WEEK PROGRAM · {time}" in small white Bebas Neue; "DANZVERSITY.COM/BREAKIN · 7531 BURNET RD AUSTIN TX" in tiny white small caps. No prices, no CTA button, no dates, no tagline, no decorative elements.',
+    fields: [
+      f('length', 'Program length', '12-WEEK PROGRAM', '12-WEEK PROGRAM'),
+      f('time', 'Day', 'WEDNESDAYS', 'WEDNESDAYS'),
+    ],
+    body: 'A vivid, high-saturation photo of a b-boy in freeze pose in the studio. Dramatic lighting, rich color, high contrast. The photo fills approximately 70% of the canvas. Centered at the top: small Danzversity teal graffiti logo. The vibrant photo in the middle. Below the photo, on three clean lines: "BREAKIN\' SERIES" in large Bebas Neue all-caps gold letters; "{length} · {time}" in small white Bebas Neue; "DANZVERSITY.COM/BREAKIN · 7531 BURNET RD AUSTIN TX" in tiny white small caps. No prices, no CTA button, no dates, no tagline, no decorative elements.',
     adCopy: genericPaidAdCopy("Breakin' Series", 'https://www.danzversity.com/registration/?utm_source=meta&utm_medium=paid&utm_campaign=breakin-2026'),
   },
 
@@ -459,8 +466,8 @@ const CHASSIS = {
   'youth-paid': { layout: 'A-Lite', headline: 'HIP HOP DANCE CLASSES', subhead: '{ages} · TAUGHT BY {instructor}', url: 'DANZVERSITY.COM/YOUTH', qr: false },
   'adult': { layout: 'A', kicker: PROOF_KICKER, headline: 'ADULT HIP HOP', subhead: 'NO EXPERIENCE NEEDED', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['FIRST CLASS FREE'], price: '{price}', cta: 'START YOUR JOURNEY', url: 'DANZVERSITY.COM/ADULTS', qr: true },
   'adult-paid': { layout: 'A-Lite', headline: 'ADULT HIP HOP', subhead: 'FIRST CLASS FREE · NO EXPERIENCE NEEDED', url: 'DANZVERSITY.COM/ADULTS', qr: false },
-  'breakin': { layout: 'A', kicker: PROOF_KICKER, headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM', infoLines: ['{time}', '{ages}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/BREAKIN', qr: true },
-  'breakin-paid': { layout: 'A-Lite', headline: "BREAKIN' SERIES", subhead: '8-WEEK PROGRAM · {time}', url: 'DANZVERSITY.COM/BREAKIN', qr: false },
+  'breakin': { layout: 'A', kicker: PROOF_KICKER, headline: "BREAKIN' SERIES", subhead: '{length}', infoLines: ['{time}', '{ages}'], price: '{price}', urgency: '{urgency}', cta: 'REGISTER NOW', url: 'DANZVERSITY.COM/BREAKIN', qr: true },
+  'breakin-paid': { layout: 'A-Lite', headline: "BREAKIN' SERIES", subhead: '{length} · {time}', url: 'DANZVERSITY.COM/BREAKIN', qr: false },
   'kpop-university': { layout: 'A', kicker: PROOF_KICKER, headline: 'UNI-VERSITY', subhead: "AUSTIN'S K-POP CREW · 18+", tagline: 'PART CLASS · PART CREW · ALL LEVELS', infoLines: ['{time}'], price: '{price}', urgency: '{urgency}', cta: 'JOIN UNI-VERSITY', url: 'DANZVERSITY.COM/KPOP', qr: true },
   'fall-enrollment': { layout: 'A', kicker: PROOF_KICKER, headline: 'FALL CLASSES', subhead: '{start}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{ages}'], price: 'FIRST CLASS FREE', urgency: '{urgency}', cta: 'ENROLL NOW', url: 'DANZVERSITY.COM/YOUTH', qr: true },
   'after-school': { layout: 'A', kicker: PROOF_KICKER, headline: 'HIP HOP AFTER SCHOOL', subhead: '{audience}', tagline: "MORE THAN MOVES — IT'S CULTURE.", infoLines: ['{detail}', 'TAUGHT BY WORKING ARTISTS'], cta: 'PARTNER WITH US', url: 'DANZVERSITY.COM/AFTER-SCHOOL', qr: true },
