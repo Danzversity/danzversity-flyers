@@ -115,6 +115,14 @@ async function getFileMeta(fileId) {
   return JSON.parse(res.buffer.toString());
 }
 
+// Diagnostic: WHO this service actually authenticates as. The membership fixes
+// target danzversity-flyer-maker@…, but if the key pasted into Render belongs
+// to a different SA, every write 403s no matter what Drive shows Tony.
+function authIdentity() {
+  try { return getCredentials().client_email || '(no client_email in key)'; }
+  catch (e) { return 'error: ' + e.message; }
+}
+
 // Diagnostic: the shared drive's own restriction flags (per-drive settings can
 // override org policy — e.g. domainUsersOnly blocks external members like the SA).
 async function getDriveInfo(driveId) {
@@ -219,4 +227,4 @@ async function getAacmeLogo() {
   return _aacmeLogo;
 }
 
-module.exports = { isConfigured, saveImages, listImages, listVideos, listAudio, downloadFile, uploadImage, resolvePath, getAacmeLogo, getFileMeta, getDriveInfo };
+module.exports = { isConfigured, saveImages, listImages, listVideos, listAudio, downloadFile, uploadImage, resolvePath, getAacmeLogo, getFileMeta, getDriveInfo, authIdentity };

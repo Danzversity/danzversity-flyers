@@ -268,7 +268,7 @@ app.get('/drive-diag', async (req, res) => {
   let drive = null;
   const driveId = out.flyersRoot && out.flyersRoot.driveId;
   if (driveId) { try { drive = await gdrive.getDriveInfo(driveId); } catch (e) { drive = { driveId, error: e.message }; } }
-  res.json({ ok: true, asServiceAccount: true, folders: out, drive });
+  res.json({ ok: true, asServiceAccount: gdrive.authIdentity(), folders: out, drive });
 });
 
 // ── CREATE step ──────────────────────────────────────────────────────────────
