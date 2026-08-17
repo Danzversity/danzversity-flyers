@@ -115,6 +115,15 @@ async function getFileMeta(fileId) {
   return JSON.parse(res.buffer.toString());
 }
 
+// Diagnostic: the shared drive's own restriction flags (per-drive settings can
+// override org policy — e.g. domainUsersOnly blocks external members like the SA).
+async function getDriveInfo(driveId) {
+  const url = `${API}/drives/${encodeURIComponent(driveId)}?fields=id,name,restrictions`;
+  const res = await httpsRequest('GET', url, await authHeaders());
+  if (res.status !== 200) throw new Error(`drives.get ${res.status}: ${res.buffer.toString().slice(0, 300)}`);
+  return JSON.parse(res.buffer.toString());
+}
+
 async function downloadFile(fileId) {
   const url = `${API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`;
   const res = await httpsRequest('GET', url, await authHeaders());
@@ -210,4 +219,4 @@ async function getAacmeLogo() {
   return _aacmeLogo;
 }
 
-module.exports = { isConfigured, saveImages, listImages, listVideos, listAudio, downloadFile, uploadImage, resolvePath, getAacmeLogo, getFileMeta };
+module.exports = { isConfigured, saveImages, listImages, listVideos, listAudio, downloadFile, uploadImage, resolvePath, getAacmeLogo, getFileMeta, getDriveInfo };

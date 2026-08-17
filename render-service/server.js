@@ -263,7 +263,12 @@ app.get('/drive-diag', async (req, res) => {
     try { out[k] = await gdrive.getFileMeta(id); }
     catch (e) { out[k] = { id, error: e.message }; }
   }
-  res.json({ ok: true, asServiceAccount: true, folders: out });
+  // Per-drive restriction flags — a drive-level domainUsersOnly overrides the
+  // org "allow external users" policy and blocks the (external) SA's writes.
+  let drive = null;
+  const driveId = out.flyersRoot && out.flyersRoot.driveId;
+  if (driveId) { try { drive = await gdrive.getDriveInfo(driveId); } catch (e) { drive = { driveId, error: e.message }; } }
+  res.json({ ok: true, asServiceAccount: true, folders: out, drive });
 });
 
 // ── CREATE step ──────────────────────────────────────────────────────────────
