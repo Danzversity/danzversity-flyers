@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.8.1'; // 1.8.1: breakin program length is a field (8-WEEK hardcode removed); breakin defaults refreshed to the live 12-week fall series
+const VERSION = '1.8.2'; // 1.8.2: portrait photos in scene mode render WHOLE with blur-fill gutters (no more headless cover-crops); compose warns + suggests Cutout
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -457,6 +457,17 @@ app.post('/compose', composeUpload, async (req, res) => {
   const t0 = Date.now();
   try {
     const { templateKey, content, style, mode, background, person, used } = await gatherComposeInputs(req);
+
+    // Portrait photo in scene mode → the band renders it whole with blurred
+    // side fill (v1.8.2). Tell the operator, and point at the better tool.
+    const warnings = [];
+    if (mode === 'scene' && person) {
+      const pm = await sharp(person).metadata();
+      if ((pm.width || 0) < (pm.height || 0)) {
+        warnings.push('Tall (portrait) photo: it renders WHOLE in the band with a blurred fill at the sides. For a bigger dancer, use "Cutout on background" — it lifts the subject and sizes them properly.');
+      }
+    }
+
     const result = await composeFlyer({ templateKey, content, style, background, person, slug: req.body.slug || content.title });
     const images = result.images.map((i) => ({
       family: i.family, channel: i.channel, sizeKey: i.sizeKey, label: i.label,
@@ -468,7 +479,7 @@ app.post('/compose', composeUpload, async (req, res) => {
     try { adCopy = assemble(templateKey, content).adCopy; } catch (_) { /* non-fatal */ }
 
     res.json({
-      ok: true, templateKey, mode, used, version: VERSION, family: result.family, channel: result.channel, slug: result.slug, layout: result.layout,
+      ok: true, templateKey, mode, used, warnings, version: VERSION, family: result.family, channel: result.channel, slug: result.slug, layout: result.layout,
       style: result.style, month: content.month || '', driveConfigured: gdrive.isConfigured(), adCopy,
       counts: { total: images.length }, renderMs: Date.now() - t0, images,
     });

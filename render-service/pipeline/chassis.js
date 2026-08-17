@@ -339,13 +339,33 @@ async function personLayers(personInput, W, H, layout) {
     return { kind: 'scene', box: { x: left, y: top, w: m.width, h: m.height }, layers: [{ input: masked, top, left }] };
   }
 
-  // ── Standard scene (A/B): SMART-CROP to the dancers (cover + attention) into a
-  // defined middle band, then feather all four edges + tone-grade so it melts
-  // into the plate on every side. Band ends at ~63% so the info block clears it.
+  // ── Standard scene (A/B): the photo melts into a defined middle band. Band
+  // ends at ~63% so the info block clears it. LANDSCAPE photos are SMART-CROPPED
+  // to the subjects (cover + attention). PORTRAIT photos must NOT cover-crop —
+  // the wide band keeps only a ~30% horizontal slice and saliency aims at the
+  // brightest region, not the person (the 8/14 headless-freeze flyer). They
+  // render WHOLE (contain) over a blurred darkened blow-up of themselves — the
+  // proven VisitAustin blur-fill treatment.
   const bandW = Math.round(W * 0.80), bandH = Math.round(H * 0.30);
   const top = Math.round(H * 0.335), left = Math.round((W - bandW) / 2);
-  let treated = await sharp(personInput)
-    .resize({ width: bandW, height: bandH, fit: 'cover', position: sharp.strategy.attention })
+  const isPortrait = (meta0.width || 0) < (meta0.height || 0);
+  let base;
+  if (isPortrait) {
+    const fg = await sharp(personInput).resize({ width: bandW, height: bandH, fit: 'inside' }).png().toBuffer();
+    const fm = await sharp(fg).metadata();
+    const bgFill = await sharp(personInput)
+      .resize(bandW, bandH, { fit: 'cover' })
+      .blur(24).modulate({ brightness: 0.5, saturation: 0.8 })
+      .png().toBuffer();
+    base = await sharp(bgFill)
+      .composite([{ input: fg, top: Math.round((bandH - fm.height) / 2), left: Math.round((bandW - fm.width) / 2) }])
+      .png().toBuffer();
+  } else {
+    base = await sharp(personInput)
+      .resize({ width: bandW, height: bandH, fit: 'cover', position: sharp.strategy.attention })
+      .png().toBuffer();
+  }
+  let treated = await sharp(base)
     .modulate({ brightness: 0.94, saturation: 0.9 })
     .ensureAlpha()
     .composite([{ input: bandMaskSVG(bandW, bandH), blend: 'dest-in' }])   // feather top + bottom
@@ -353,7 +373,7 @@ async function personLayers(personInput, W, H, layout) {
   treated = await sharp(treated)
     .composite([{ input: sideMaskSVG(bandW, bandH), blend: 'dest-in' }])   // feather left + right
     .png().toBuffer();
-  return { kind: 'scene', box: { x: left, y: top, w: bandW, h: bandH }, layers: [{ input: treated, top, left }] };
+  return { kind: 'scene', portraitBlurFill: isPortrait, box: { x: left, y: top, w: bandW, h: bandH }, layers: [{ input: treated, top, left }] };
 }
 
 // ── Tier-1 geometry QA gate ──────────────────────────────────────────────────
