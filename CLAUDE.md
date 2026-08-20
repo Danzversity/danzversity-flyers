@@ -6,6 +6,7 @@ A start-to-finish flyer tool on a **hybrid model**: AI provides the *visuals*, r
 
 - **① Compose** — pick a template, fill the info, pick a **background** from the library + a **real photo** (cut out via Remove.bg), toggle QR → the code chassis (logo, gold Bebas headline, exact info, CTA, QR, footer) is stamped over it → a finished master.
 - **② Size & ship** — the master derives into all distribution sizes, packages Meta/PMax bundles, and saves to the dated Drive tree. (Or drop your own finished master here.)
+- **📤 Post a finished flyer (v1.10.0)** — the stills twin of "post a finished video": artwork made anywhere (Canva, an old flyer, a designer's file) goes straight to IG/FB as-is. No template, no chassis, no derive. The only intelligence is **placement**, because Instagram's feed rejects anything outside 4:5–1.91:1 — the picker reads each file's ratio, defaults to the legal placement (feed / Story / Facebook-only), and out-of-range art is letterboxed onto brand black server-side (`fit`) instead of failing at the rail with a cryptic Graph error. Batch several, one caption, same preview → confirm → send dialog as everything else.
 - **🎬 Video (v1.4.0)** — the same doctrine for short-form clips. "What are we making today?" mode picker → pick footage from the `_video` Drive library, trim, hook line → ffmpeg cuts it to the **Video Output Standard v1**: cold-open (NO title slide), burned-in hook text (first 3s), corner logo watermark, 1.4s code-rendered brand **end-card** (the video chassis), loudnorm −14 LUFS, and a mandatory **ffprobe quality gate** — any output that misses the encode contract fails the compose loudly (flyer OCR-gate doctrine).
 
 **Why hybrid:** AI text/layout is inconsistent (that's why the old full-AI path made you pick from 4). Code-rendered text is **byte-identical every time**. AI is used only where it's strong — backgrounds — and those are **captured into an approved library** so they're free + repeatable.
@@ -58,6 +59,7 @@ render.yaml               Render single-origin deploy
 - `POST /process` — manual master(s) → all sizes · `POST /derive-one`
 - `POST /export-meta-bundle` · `POST /export-pmax-bundle` · `POST /save-to-drive`
 - `POST /assemble` (ad copy + prompt) · `GET /verify-url`
+- **`POST /post-social`** — base64 + caption + platforms + placement + `mode` (`preview`|`send`) → the danzversity-social rail. Optional **`fit`** (a `brand.sizes` key, `fitPolicy` `letterbox`|`smart`) re-frames the image first — the "post a finished flyer" path uses it to make any ratio Meta-legal; composed flyers pass no `fit` and go out exactly as rendered. Un-fitted uploads over 1920px are downscaled (Meta caps feed images at 8MB).
 - **Video:** `GET /videos` · `POST /upload-video` · `POST /video-compose` (sourceId|file + start/seconds/aspects/hook/end JSON → gated MP4s by token URL) · `GET /video-out/:token.mp4` (1h TTL, behind auth) · `POST /save-videos-to-drive` (`FLYERS/{tpl}/{YYYY-MM}/Video/`)
 
 ## Run

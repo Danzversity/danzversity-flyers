@@ -30,6 +30,19 @@
       </div>
     </section>
 
+    <!-- POST AN ALREADY-MADE FLYER (no compose, no chassis) -->
+    <section class="panel" id="flyerPostExisting">
+      <h2 class="step">📤 Post a finished flyer</h2>
+      <p class="muted">Already have the artwork &mdash; Canva, an old flyer, anything? Post it as-is. No template, no chassis, exactly the file you pick. Pick several and they go out together on one caption.</p>
+      <div class="actions">
+        <input type="file" id="fPostFile" accept="image/png,image/jpeg,image/webp" multiple class="hidden" />
+        <button id="fPostBtn" class="ghost" type="button">Choose flyer image(s)&hellip;</button>
+        <button id="fPostGoBtn" class="primary hidden" type="button">📣 Post these &rarr;</button>
+        <button id="fPostClearBtn" class="ghost hidden" type="button">Clear</button>
+      </div>
+      <div id="fPostGrid" class="grid hidden"></div>
+    </section>
+
     <!-- BUILD -->
     <section class="panel" id="createPanel">
       <h2 class="step">① Build the flyer</h2>
@@ -294,6 +307,22 @@
       <button id="postSend" class="primary" type="button">Preview →</button>
     </div>
   </dialog>
+
+  <!-- chosen finished-flyer tile (📤 post as-is) -->
+  <template id="fPostTpl">
+    <div class="tile">
+      <div class="thumb"><img alt="" /></div>
+      <div class="tile-meta">
+        <span class="tile-label"></span>
+        <span class="tile-dims muted"></span>
+      </div>
+      <div class="tile-row">
+        <select class="sm-select f-place"></select>
+        <button class="f-remove ghost sm" type="button" title="Remove from this batch">✕</button>
+      </div>
+      <div class="f-note post-plan-line"></div>
+    </div>
+  </template>
 
   <!-- tile template -->
   <template id="tileTpl">

@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.9.0'; // 1.9.0: Bboy Wicket on the breakin templates — instructor line + gold RED BULL BC ONE JUDGE credential badge (urgency slot); badge/subhead text auto-shrinks to fit
+const VERSION = '1.10.0'; // 1.10.0: "Post a finished flyer" — post artwork made outside this tool straight to IG/FB, placement picked from its aspect ratio, /post-social gains `fit` (Meta-legal re-framing) + a 1920px downscale guard
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -184,20 +184,43 @@ app.get('/pub/:token.mp4', (req, res) => {
   res.send(entry.buffer);
 });
 
-// ── Post a rendered flyer to social (danzversity-social rail) ───────────────
-// Body: { base64, caption, platforms?, mode? ('preview' default | 'send'), link? }
+// ── Post a flyer to social (danzversity-social rail) ────────────────────────
+// Body: { base64, caption, platforms?, placement?, mode? ('preview' default |
+//         'send'), link?, fit?, fitPolicy? }
 // preview → the rail composes but does NOT post; send → posts to FB/IG.
+//
+// `fit` (a brand size key) re-frames the image onto that size before posting —
+// letterboxed on brand black by default, 'smart' to fill-crop instead. It exists
+// for the "post a finished flyer" path: artwork made outside this tool arrives
+// at any ratio, and Instagram's feed REJECTS anything outside 4:5–1.91:1.
+// Flyers composed here are already at legal sizes and pass no `fit` at all, so
+// they still go out exactly as rendered.
 app.post('/post-social', async (req, res) => {
   try {
-    const { base64, caption = '', platforms, placement = 'feed', mode = 'preview', link } = req.body || {};
+    const { base64, caption = '', platforms, placement = 'feed', mode = 'preview', link, fit, fitPolicy } = req.body || {};
     if (!base64) return res.status(400).json({ ok: false, error: 'base64 image required' });
     if (!social.isConfigured()) return res.status(503).json({ ok: false, error: 'SOCIAL_RAIL_KEY not set on the server (Render env).' });
-    // Meta wants JPEG — transcode whatever family/size PNG comes in.
-    const jpeg = await sharp(Buffer.from(base64, 'base64')).jpeg({ quality: 92 }).toBuffer();
+    let buf = Buffer.from(base64, 'base64');
+    if (fit) {
+      if (!brand.sizes[fit]) return res.status(400).json({ ok: false, error: `unknown fit size: ${fit}` });
+      buf = (await deriveSize(buf, fit, { policy: fitPolicy === 'smart' ? 'smart' : 'letterbox' })).buffer;
+    } else {
+      // Un-fitted uploads can be a 6000px print master — pure waste on a
+      // 1080-wide feed, and Meta caps feed images at 8MB. Composed flyers top
+      // out at 1920 so this never touches them.
+      const m = await sharp(buf).metadata();
+      if (Math.max(m.width || 0, m.height || 0) > 1920) {
+        buf = await sharp(buf).rotate().resize(1920, 1920, { fit: 'inside' }).png({ compressionLevel: 9 }).toBuffer();
+      }
+    }
+    // Meta wants JPEG — transcode whatever comes in, flattening any transparency
+    // onto brand black so it matches the letterbox fill rather than going gray.
+    const jpeg = await sharp(buf).flatten({ background: brand.LETTERBOX_FILL }).jpeg({ quality: 92 }).toBuffer();
+    const posted = await sharp(jpeg).metadata();
     const result = await social.post({ imageBuffer: jpeg, caption, platforms, placement, mode, link });
     // ok reflects the rail's verdict — false on a partial send (per-platform
     // detail rides in result.results).
-    res.json({ ok: result.ok !== false, mode, placement, result });
+    res.json({ ok: result.ok !== false, mode, placement, posted: { width: posted.width, height: posted.height, bytes: jpeg.length }, result });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

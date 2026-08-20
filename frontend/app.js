@@ -48,13 +48,14 @@ function init() {
   $('saveDrive').addEventListener('click', onSaveDrive);
   $('smartPostBtn').addEventListener('click', onSmartPost);
   initPostDialog();
+  initFlyerPostExisting();
   checkHealth();
   initCreate();
   initVideo();
 }
 
 // ── Maker mode: "What are we making today?" — Flyer | Video ──────────────────
-const FLYER_PANELS = ['createPanel', 'resultsPanel', 'inputPanel'];
+const FLYER_PANELS = ['flyerPostExisting', 'createPanel', 'resultsPanel', 'inputPanel'];
 const VIDEO_PANELS = ['videoPanel', 'videoPostExisting', 'videoResults'];
 function setMaker(m) {
   vid.maker = m === 'video' ? 'video' : 'flyer';
@@ -594,6 +595,115 @@ function onSmartPost() {
   openPostDialog(entries);
 }
 
+// ── 📤 Post a finished flyer (artwork made outside this tool) ────────────────
+// The stills twin of "Post a finished video": no template, no chassis, no
+// derive — the file you picked is what goes out. The only intelligence is
+// PLACEMENT, because Meta's rules are unforgiving: the Instagram feed rejects
+// anything outside 4:5 (0.8) – 1.91:1, so out-of-range art either rides a
+// Story or gets letterboxed onto brand black (server-side `fit`) instead of
+// failing at the rail with a cryptic Graph error.
+const IG_FEED_MIN = 0.8, IG_FEED_MAX = 1.91;
+const fpost = { items: [] };
+
+// Every legal way to post one image, given its ratio. `fit` (a brand size key)
+// asks the server to re-frame before posting; null posts the pixels untouched.
+const FPOST_OPTIONS = {
+  feed:      { label: 'Feed — Instagram + Facebook',              desc: 'Instagram + Facebook feed',                  platforms: ['facebook', 'instagram'], placement: 'feed',  useCaption: true,  fit: null,   note: 'Posted exactly as-is.' },
+  feedPad45: { label: 'Feed — Instagram + Facebook (pad to 4:5)', desc: 'Instagram + Facebook feed · padded to 4:5',   platforms: ['facebook', 'instagram'], placement: 'feed',  useCaption: true,  fit: '4x5',  note: 'Too tall for the Instagram feed — padded to 4:5 on brand black.' },
+  feedPad11: { label: 'Feed — Instagram + Facebook (pad to 1:1)', desc: 'Instagram + Facebook feed · padded to 1:1',   platforms: ['facebook', 'instagram'], placement: 'feed',  useCaption: true,  fit: '1x1',  note: 'Too wide for the Instagram feed — padded to 1:1 on brand black.' },
+  story:     { label: 'Story — Instagram + Facebook',             desc: 'Instagram + Facebook Story · fitted to 9:16', platforms: ['facebook', 'instagram'], placement: 'story', useCaption: false, fit: '9x16', note: 'Fitted to 9:16 on brand black. Stories carry no caption.' },
+  fbOnly:    { label: 'Feed — Facebook only',                     desc: 'Facebook feed only',                         platforms: ['facebook'],              placement: 'feed',  useCaption: true,  fit: null,   note: 'Facebook takes any shape; Instagram is skipped.' },
+};
+
+// Options in preference order — the first is the default.
+function fpostOptionsFor(ratio) {
+  if (ratio < 0.62) return ['story', 'feedPad45', 'fbOnly'];            // 9:16-ish story art
+  if (ratio < IG_FEED_MIN) return ['feedPad45', 'story', 'fbOnly'];     // tall poster (2:3, A4…)
+  if (ratio <= IG_FEED_MAX) return ['feed', 'story', 'fbOnly'];         // already feed-legal
+  return ['fbOnly', 'feedPad11', 'story'];                              // banner-wide
+}
+
+function initFlyerPostExisting() {
+  $('fPostBtn').addEventListener('click', () => $('fPostFile').click());
+  $('fPostFile').addEventListener('change', onFlyerPostPick);
+  $('fPostGoBtn').addEventListener('click', onFlyerPostGo);
+  $('fPostClearBtn').addEventListener('click', () => { fpost.items = []; renderFPostGrid(); });
+}
+
+// Read one picked file into { base64, mime, width, height } — dimensions come
+// from the decoded image, not the filename, since the placement hangs on them.
+function readPickedImage(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('could not read the file'));
+    fr.onload = () => {
+      const dataUrl = String(fr.result);
+      const img = new Image();
+      img.onerror = () => reject(new Error('not a readable image'));
+      img.onload = () => resolve({
+        label: file.name, mime: file.type || 'image/png',
+        base64: dataUrl.slice(dataUrl.indexOf(',') + 1),
+        width: img.naturalWidth, height: img.naturalHeight, bytes: file.size,
+      });
+      img.src = dataUrl;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+async function onFlyerPostPick() {
+  const files = Array.from($('fPostFile').files || []);
+  $('fPostFile').value = '';
+  if (!files.length) return;
+  const btn = $('fPostBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin dark"></span>Reading…';
+  try {
+    for (const f of files) {
+      const img = await readPickedImage(f);
+      const opts = fpostOptionsFor(img.width / img.height);
+      fpost.items.push({ img, options: opts, choice: opts[0] });
+    }
+    renderFPostGrid();
+  } catch (e) { toast('Could not read that file: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Choose flyer image(s)…'; }
+}
+
+function renderFPostGrid() {
+  const host = $('fPostGrid'); host.innerHTML = '';
+  const any = fpost.items.length > 0;
+  host.classList.toggle('hidden', !any);
+  $('fPostGoBtn').classList.toggle('hidden', !any);
+  $('fPostClearBtn').classList.toggle('hidden', !any);
+  if (!any) return;
+  $('fPostGoBtn').textContent = fpost.items.length === 1 ? '📣 Post this →' : `📣 Post these ${fpost.items.length} →`;
+  const tpl = $('fPostTpl').content;
+  fpost.items.forEach((it, idx) => {
+    const node = tpl.cloneNode(true);
+    node.querySelector('img').src = `data:${it.img.mime};base64,${it.img.base64}`;
+    node.querySelector('.tile-label').textContent = it.img.label;
+    node.querySelector('.tile-dims').textContent = `${it.img.width}×${it.img.height} · ${(it.img.bytes / 1e6).toFixed(1)} MB`;
+    const sel = node.querySelector('.f-place');
+    it.options.forEach((k) => { const o = el('option'); o.value = k; o.textContent = FPOST_OPTIONS[k].label; sel.appendChild(o); });
+    sel.value = it.choice;
+    const note = node.querySelector('.f-note');
+    note.textContent = FPOST_OPTIONS[it.choice].note;
+    sel.addEventListener('change', () => { it.choice = sel.value; note.textContent = FPOST_OPTIONS[sel.value].note; });
+    node.querySelector('.f-remove').addEventListener('click', () => { fpost.items.splice(idx, 1); renderFPostGrid(); });
+    host.appendChild(node);
+  });
+}
+
+// Hand the batch to the same preview → confirm → send dialog the composed
+// flyers use, so nothing about the safety path is duplicated or bypassed.
+function onFlyerPostGo() {
+  if (!fpost.items.length) return;
+  const plan = fpost.items.map((it) => {
+    const o = FPOST_OPTIONS[it.choice];
+    return { img: it.img, platforms: o.platforms, placement: o.placement, useCaption: o.useCaption, fit: o.fit, source: 'existing',
+             desc: `${it.img.label} · ${o.desc}` };
+  });
+  openPostDialog(plan);
+}
+
 // ── Social (danzversity-social rail: preview → confirm → send) ──────────────
 // One dialog, two clicks: "Preview →" validates with the rail, then the same
 // button becomes "Post now" so nothing publishes on a single click.
@@ -636,14 +746,15 @@ function openPostDialog(plan) {
   $('postVid').classList.add('hidden'); $('postVid').removeAttribute('src');
   $('postImg').classList.remove('hidden');
   const first = plan[0];
-  $('postImg').src = `data:image/png;base64,${first.img.base64}`;
+  $('postImg').src = `data:${first.img.mime || 'image/png'};base64,${first.img.base64}`;
   $('postMeta').textContent = plan.length === 1
     ? `${first.img.label} · ${first.img.width}×${first.img.height}`
     : `${plan.length} placements, one click`;
 
-  // The plan list — say exactly where each image is going.
+  // The plan list — say exactly where each image is going. A `fit` always shows
+  // it: "we are re-framing your artwork" is never something to leave implicit.
   const planHost = $('postPlan'); planHost.innerHTML = '';
-  planHost.classList.toggle('hidden', plan.length === 1 && first.placement === 'feed' && first.platforms.length === 2);
+  planHost.classList.toggle('hidden', plan.length === 1 && first.placement === 'feed' && first.platforms.length === 2 && !first.fit);
   plan.forEach((e) => planHost.appendChild(el('div', 'post-plan-line', `→ ${e.desc}`)));
 
   // Platform checkboxes: only meaningful for a single feed entry — the plan
@@ -688,7 +799,7 @@ async function onPostSend() {
     const summaries = []; let anyFail = false;
     for (const e of entries) {
       const r = await (await fetch(`${API}/post-social`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: e.img.base64, caption: e.useCaption ? caption : '', platforms: e.platforms, placement: e.placement, mode }) })).json();
+        body: JSON.stringify({ base64: e.img.base64, caption: e.useCaption ? caption : '', platforms: e.platforms, placement: e.placement, fit: e.fit || undefined, mode }) })).json();
       if (mode === 'preview') {
         if (!r.ok) throw new Error(`${e.desc}: ${r.error || 'preview failed'}`);
         continue;
@@ -710,6 +821,9 @@ async function onPostSend() {
     if (mode === 'preview') { setPostStage('confirm'); }
     else {
       $('postDialog').close(); setPostStage('compose');
+      // Clear the finished-flyer batch once it has gone out — a batch left on
+      // screen invites a second click, and a double-post is unfixable.
+      if (entries.some((e) => e.source === 'existing')) { fpost.items = []; renderFPostGrid(); }
       toast((anyFail ? '⚠ Partial send — retry ONLY the failed platform: ' : 'Posted 🎉 ') + summaries.join(' | '), anyFail ? 'err' : 'ok');
     }
   } catch (e) { toast('Social post failed: ' + e.message, 'err'); setPostStage('compose'); }
