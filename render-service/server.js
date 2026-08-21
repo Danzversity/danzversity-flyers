@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.11.0'; // 1.11.0: 🔁 Repost — browse the saved FLYERS Drive tree and post an asset again straight from Drive (/drive-browse, /drive-thumb, /post-social driveFileId); no download, no re-upload, no re-compose
+const VERSION = '1.11.1'; // 1.11.0: 🔁 Repost — browse the saved FLYERS Drive tree and post an asset again straight from Drive (/drive-browse, /drive-thumb, /post-social driveFileId); no download, no re-upload, no re-compose
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -258,7 +258,9 @@ app.get('/drive-browse', async (req, res) => {
         // 2026-07 no matter which was touched last.
         .sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }))
         .map((f) => ({ id: f.id, name: f.name })),
-      images: images.map((f) => ({
+      // The root is an index of events, not a place finished flyers live — the
+      // only loose file there is the AACME grant logo, which is an ingredient.
+      images: (atRoot ? [] : images).map((f) => ({
         id: f.id,
         name: f.name,
         mimeType: f.mimeType,
