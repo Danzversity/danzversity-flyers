@@ -88,7 +88,10 @@ function qs(params) {
 async function listByMime(folderId, mimePrefix) {
   const url = `${API}/files?` + qs({
     q: `'${folderId}' in parents and mimeType contains '${mimePrefix}' and trashed=false`,
-    fields: 'files(id,name,mimeType,thumbnailLink,modifiedTime,size)',
+    // imageMediaMetadata carries the intrinsic w/h — the repost picker needs the
+    // aspect ratio to choose a placement, and reading it here avoids downloading
+    // every asset just to measure it.
+    fields: 'files(id,name,mimeType,thumbnailLink,modifiedTime,size,imageMediaMetadata(width,height))',
     orderBy: 'modifiedTime desc',
     pageSize: 100,
     supportsAllDrives: true,
@@ -101,6 +104,11 @@ async function listByMime(folderId, mimePrefix) {
 const listImages = (folderId) => listByMime(folderId, 'image/');
 const listVideos = (folderId) => listByMime(folderId, 'video/');
 const listAudio = (folderId) => listByMime(folderId, 'audio/');
+const listFolders = (folderId) => listByMime(folderId, 'application/vnd.google-apps.folder');
+
+// The FLYERS root — the same id resolvePath() anchors saves to, so the repost
+// browser and the save tree can never drift apart.
+const rootFolderId = () => process.env.FLYERS_ROOT_FOLDER_ID || null;
 
 // Diagnostic: what the SA itself sees on a file/folder — driveId + effective
 // write capabilities. Ground truth for permission debugging (the owner's ACL
@@ -227,4 +235,4 @@ async function getAacmeLogo() {
   return _aacmeLogo;
 }
 
-module.exports = { isConfigured, saveImages, listImages, listVideos, listAudio, downloadFile, uploadImage, resolvePath, getAacmeLogo, getFileMeta, getDriveInfo, authIdentity };
+module.exports = { isConfigured, saveImages, listImages, listVideos, listAudio, listFolders, rootFolderId, downloadFile, uploadImage, resolvePath, getAacmeLogo, getFileMeta, getDriveInfo, authIdentity };

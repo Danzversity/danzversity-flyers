@@ -49,13 +49,14 @@ function init() {
   $('smartPostBtn').addEventListener('click', onSmartPost);
   initPostDialog();
   initFlyerPostExisting();
+  initRepost();
   checkHealth();
   initCreate();
   initVideo();
 }
 
 // ── Maker mode: "What are we making today?" — Flyer | Video ──────────────────
-const FLYER_PANELS = ['flyerPostExisting', 'createPanel', 'resultsPanel', 'inputPanel'];
+const FLYER_PANELS = ['repostPanel', 'flyerPostExisting', 'createPanel', 'resultsPanel', 'inputPanel'];
 const VIDEO_PANELS = ['videoPanel', 'videoPostExisting', 'videoResults'];
 function setMaker(m) {
   vid.maker = m === 'video' ? 'video' : 'flyer';
@@ -595,6 +596,137 @@ function onSmartPost() {
   openPostDialog(entries);
 }
 
+// ── 🔁 Repost — browse the saved FLYERS tree and run something again ─────────
+// Reposting is the highest-frequency job and used to be the clumsiest: either
+// re-compose (slow, and a cutout burns a Remove.bg call) or Drive → download →
+// re-upload. The assets are already filed under FLYERS/{event}/{month}/{bucket},
+// so browse them in place; the SERVER pulls the bytes from Drive at post time
+// and nothing round-trips through the laptop.
+const repost = { crumbs: [], images: [], picks: new Map(), loading: false };
+
+function initRepost() {
+  const here = () => (repost.crumbs.length ? repost.crumbs[repost.crumbs.length - 1].id : null);
+  $('repostRefresh').addEventListener('click', () => browseDrive(here()));
+  $('repostGoBtn').addEventListener('click', onRepostGo);
+  browseDrive();
+}
+
+// One browse function. The caller owns the crumb trail before calling: entering
+// a folder pushes, a crumb click truncates, and no id at all means the root.
+async function browseDrive(folderId) {
+  if (repost.loading) return;
+  repost.loading = true;
+  const grid = $('repostGrid'); grid.textContent = 'loading…';
+  try {
+    const j = await (await fetch(folderId ? `${API}/drive-browse?folderId=${encodeURIComponent(folderId)}` : `${API}/drive-browse`)).json();
+    if (!j.ok) throw new Error(j.error || 'browse failed');
+    if (j.atRoot) repost.crumbs = [{ id: j.rootId, name: 'FLYERS' }];
+    repost.folders = j.folders;
+    repost.images = j.images;
+    repost.picks.clear();
+    renderRepost();
+  } catch (e) {
+    grid.textContent = '';
+    grid.appendChild(el('span', 'muted', `Drive browse unavailable: ${e.message}`));
+    $('repostGoBtn').classList.add('hidden');
+  } finally { repost.loading = false; }
+}
+
+function enterFolder(f) {
+  repost.crumbs.push({ id: f.id, name: f.name });
+  browseDrive(f.id);
+}
+
+function jumpToCrumb(idx) {
+  repost.crumbs = repost.crumbs.slice(0, idx + 1);
+  browseDrive(idx === 0 ? null : repost.crumbs[idx].id);
+}
+
+function renderRepost() {
+  // Breadcrumbs
+  const cr = $('repostCrumbs'); cr.innerHTML = '';
+  repost.crumbs.forEach((c, i) => {
+    if (i) cr.appendChild(el('span', 'crumb-sep', '›'));
+    const b = el('button', 'crumb' + (i === repost.crumbs.length - 1 ? ' current' : '')); b.type = 'button';
+    b.textContent = c.name;
+    b.addEventListener('click', () => jumpToCrumb(i));
+    cr.appendChild(b);
+  });
+
+  const grid = $('repostGrid'); grid.innerHTML = '';
+
+  (repost.folders || []).forEach((f) => {
+    const d = el('button', 'folder-card'); d.type = 'button';
+    d.innerHTML = `<span class="folder-ico">📁</span><span class="folder-name"></span>`;
+    d.querySelector('.folder-name').textContent = f.name;
+    d.addEventListener('click', () => enterFolder(f));
+    grid.appendChild(d);
+  });
+
+  const tpl = $('repostTpl').content;
+  repost.images.forEach((im) => {
+    const node = tpl.cloneNode(true);
+    node.querySelector('img').src = `${API}/drive-thumb?id=${encodeURIComponent(im.id)}`;
+    node.querySelector('.tile-label').textContent = im.name;
+    node.querySelector('.tile-dims').textContent = im.width
+      ? `${im.width}×${im.height} · ${(im.bytes / 1e6).toFixed(1)} MB`
+      : `${(im.bytes / 1e6).toFixed(1)} MB`;
+
+    const sel = node.querySelector('.r-place');
+    const note = node.querySelector('.r-note');
+    // No dimensions from Drive (rare) → offer everything and let the server's
+    // fit re-frame handle it; guessing a placement blind would be worse.
+    const opts = im.width && im.height ? fpostOptionsFor(im.width / im.height) : ['feed', 'story', 'fbOnly'];
+    opts.forEach((k) => { const o = el('option'); o.value = k; o.textContent = FPOST_OPTIONS[k].label; sel.appendChild(o); });
+    sel.value = opts[0];
+    // The saved tree holds non-social assets too (the 600×300 email banner, the
+    // site card). They're postable, but Meta upscales them into mush — say so
+    // rather than letting a bad-looking post go out quietly.
+    const lowRes = im.width && Math.max(im.width, im.height) < 900;
+    const noteFor = (k) => (lowRes ? '⚠ Low-res for social — Meta will upscale it. ' : '') + FPOST_OPTIONS[k].note;
+    note.textContent = noteFor(opts[0]);
+    sel.addEventListener('change', () => {
+      note.textContent = noteFor(sel.value);
+      if (repost.picks.has(im.id)) repost.picks.set(im.id, { im, choice: sel.value });
+    });
+
+    const chk = node.querySelector('.r-pick');
+    chk.addEventListener('change', () => {
+      if (chk.checked) repost.picks.set(im.id, { im, choice: sel.value });
+      else repost.picks.delete(im.id);
+      syncRepostGo();
+    });
+    grid.appendChild(node);
+  });
+
+  if (!(repost.folders || []).length && !repost.images.length) {
+    grid.appendChild(el('span', 'muted', 'Nothing saved in this folder yet.'));
+  }
+  syncRepostGo();
+}
+
+function syncRepostGo() {
+  const n = repost.picks.size;
+  $('repostGoBtn').classList.toggle('hidden', !n);
+  $('repostGoBtn').textContent = n === 1 ? '📣 Post this →' : `📣 Post these ${n} →`;
+  $('repostHint').textContent = n ? 'Posts straight from Drive — nothing is downloaded or re-composed.' : '';
+}
+
+function onRepostGo() {
+  if (!repost.picks.size) return;
+  const where = repost.crumbs.map((c) => c.name).join('/');
+  const plan = [...repost.picks.values()].map(({ im, choice }) => {
+    const o = FPOST_OPTIONS[choice];
+    return {
+      img: { driveFileId: im.id, label: im.name, width: im.width, height: im.height, src: `${API}/drive-thumb?id=${encodeURIComponent(im.id)}` },
+      platforms: o.platforms, placement: o.placement, useCaption: o.useCaption, fit: o.fit, source: 'repost',
+      desc: `${im.name} · ${o.desc}`,
+    };
+  });
+  state.repostWhere = where;
+  openPostDialog(plan);
+}
+
 // ── 📤 Post a finished flyer (artwork made outside this tool) ────────────────
 // The stills twin of "Post a finished video": no template, no chassis, no
 // derive — the file you picked is what goes out. The only intelligence is
@@ -746,7 +878,9 @@ function openPostDialog(plan) {
   $('postVid').classList.add('hidden'); $('postVid').removeAttribute('src');
   $('postImg').classList.remove('hidden');
   const first = plan[0];
-  $('postImg').src = `data:${first.img.mime || 'image/png'};base64,${first.img.base64}`;
+  // Repost entries carry a thumbnail URL instead of bytes — the full asset never
+  // reaches the browser, the server posts it straight from Drive.
+  $('postImg').src = first.img.src || `data:${first.img.mime || 'image/png'};base64,${first.img.base64}`;
   $('postMeta').textContent = plan.length === 1
     ? `${first.img.label} · ${first.img.width}×${first.img.height}`
     : `${plan.length} placements, one click`;
@@ -799,7 +933,7 @@ async function onPostSend() {
     const summaries = []; let anyFail = false;
     for (const e of entries) {
       const r = await (await fetch(`${API}/post-social`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: e.img.base64, caption: e.useCaption ? caption : '', platforms: e.platforms, placement: e.placement, fit: e.fit || undefined, mode }) })).json();
+        body: JSON.stringify({ base64: e.img.base64, driveFileId: e.img.driveFileId, caption: e.useCaption ? caption : '', platforms: e.platforms, placement: e.placement, fit: e.fit || undefined, mode }) })).json();
       if (mode === 'preview') {
         if (!r.ok) throw new Error(`${e.desc}: ${r.error || 'preview failed'}`);
         continue;
@@ -821,9 +955,10 @@ async function onPostSend() {
     if (mode === 'preview') { setPostStage('confirm'); }
     else {
       $('postDialog').close(); setPostStage('compose');
-      // Clear the finished-flyer batch once it has gone out — a batch left on
-      // screen invites a second click, and a double-post is unfixable.
+      // Clear the batch once it has gone out — a batch left on screen invites a
+      // second click, and a double-post is unfixable.
       if (entries.some((e) => e.source === 'existing')) { fpost.items = []; renderFPostGrid(); }
+      if (entries.some((e) => e.source === 'repost')) { repost.picks.clear(); renderRepost(); }
       toast((anyFail ? '⚠ Partial send — retry ONLY the failed platform: ' : 'Posted 🎉 ') + summaries.join(' | '), anyFail ? 'err' : 'ok');
     }
   } catch (e) { toast('Social post failed: ' + e.message, 'err'); setPostStage('compose'); }

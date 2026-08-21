@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.10.0'; // 1.10.0: "Post a finished flyer" — post artwork made outside this tool straight to IG/FB, placement picked from its aspect ratio, /post-social gains `fit` (Meta-legal re-framing) + a 1920px downscale guard
+const VERSION = '1.11.0'; // 1.11.0: 🔁 Repost — browse the saved FLYERS Drive tree and post an asset again straight from Drive (/drive-browse, /drive-thumb, /post-social driveFileId); no download, no re-upload, no re-compose
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -197,13 +197,21 @@ app.get('/pub/:token.mp4', (req, res) => {
 // they still go out exactly as rendered.
 app.post('/post-social', async (req, res) => {
   try {
-    const { base64, caption = '', platforms, placement = 'feed', mode = 'preview', link, fit, fitPolicy } = req.body || {};
-    if (!base64) return res.status(400).json({ ok: false, error: 'base64 image required' });
+    const { base64, driveFileId, caption = '', platforms, placement = 'feed', mode = 'preview', link, fit, fitPolicy } = req.body || {};
+    if (!base64 && !driveFileId) return res.status(400).json({ ok: false, error: 'base64 image or driveFileId required' });
     if (!social.isConfigured()) return res.status(503).json({ ok: false, error: 'SOCIAL_RAIL_KEY not set on the server (Render env).' });
-    let buf = Buffer.from(base64, 'base64');
+    // driveFileId = the repost path: the bytes come straight from the saved
+    // FLYERS tree, so nothing is downloaded to a laptop and re-uploaded.
+    let buf = driveFileId ? await gdrive.downloadFile(String(driveFileId)) : Buffer.from(base64, 'base64');
     if (fit) {
       if (!brand.sizes[fit]) return res.status(400).json({ ok: false, error: `unknown fit size: ${fit}` });
-      buf = (await deriveSize(buf, fit, { policy: fitPolicy === 'smart' ? 'smart' : 'letterbox' })).buffer;
+      // A repost of our OWN render already IS the target size — re-deriving it
+      // would be a pointless re-encode. Only re-frame when the pixels disagree.
+      const m = await sharp(buf).metadata();
+      const target = brand.sizes[fit];
+      if (m.width !== target.w || m.height !== target.h) {
+        buf = (await deriveSize(buf, fit, { policy: fitPolicy === 'smart' ? 'smart' : 'letterbox' })).buffer;
+      }
     } else {
       // Un-fitted uploads can be a 6000px print master — pure waste on a
       // 1080-wide feed, and Meta caps feed images at 8MB. Composed flyers top
@@ -224,6 +232,58 @@ app.post('/post-social', async (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
+});
+
+// ── Repost browser: walk the saved FLYERS tree ──────────────────────────────
+// Reposting used to mean re-composing (slow, and a cutout burns a Remove.bg
+// call) or Drive → download → re-upload. Everything is already sitting in
+// FLYERS/{event}/{YYYY-MM}/{bucket}, so browse it in place and post from there.
+// The library pools are hidden — they hold raw ingredients, not finished flyers.
+const LIBRARY_FOLDERS = new Set(['_backgrounds', '_people', '_video', '_music']);
+app.get('/drive-browse', async (req, res) => {
+  try {
+    if (!gdrive.isConfigured()) return res.status(503).json({ ok: false, error: 'Drive not configured on this server.' });
+    const root = gdrive.rootFolderId();
+    if (!root) return res.status(503).json({ ok: false, error: 'FLYERS_ROOT_FOLDER_ID not set.' });
+    const folderId = String(req.query.folderId || root);
+    const atRoot = folderId === root;
+    const [folders, images] = await Promise.all([gdrive.listFolders(folderId), gdrive.listImages(folderId)]);
+    res.json({
+      ok: true,
+      atRoot,
+      rootId: root,
+      folders: folders
+        .filter((f) => !(atRoot && LIBRARY_FOLDERS.has(f.name)))
+        // Newest-first is wrong for a date tree — 2026-08 should sit above
+        // 2026-07 no matter which was touched last.
+        .sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }))
+        .map((f) => ({ id: f.id, name: f.name })),
+      images: images.map((f) => ({
+        id: f.id,
+        name: f.name,
+        mimeType: f.mimeType,
+        bytes: Number(f.size) || 0,
+        modifiedTime: f.modifiedTime,
+        width: (f.imageMediaMetadata && f.imageMediaMetadata.width) || null,
+        height: (f.imageMediaMetadata && f.imageMediaMetadata.height) || null,
+      })),
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Thumbnail for a saved Drive asset. Proxied (not Drive's thumbnailLink) so the
+// browser never needs Drive credentials and the tool stays single-origin.
+app.get('/drive-thumb', async (req, res) => {
+  try {
+    if (!req.query.id) return res.status(400).end();
+    const buf = await gdrive.downloadFile(String(req.query.id));
+    const out = await sharp(buf).resize(320, 400, { fit: 'inside' }).jpeg({ quality: 70 }).toBuffer();
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, max-age=600');
+    res.send(out);
+  } catch (e) { res.status(404).end(); }
 });
 
 // ── Caption suggestions for the social-post dialog ──────────────────────────
