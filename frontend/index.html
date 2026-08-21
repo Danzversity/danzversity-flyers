@@ -30,6 +30,17 @@
       </div>
     </section>
 
+    <!-- SCHEDULED QUEUE — what's waiting to go out -->
+    <section class="panel hidden" id="queuePanel">
+      <h2 class="step">🕒 Scheduled to go out</h2>
+      <p class="muted">Fired by a Cloudflare cron every 5 minutes &mdash; it runs whether or not this page, your laptop or the app is open.</p>
+      <div id="queueList"></div>
+      <div class="create-actions">
+        <button id="queueRefresh" class="ghost sm" type="button">↻ Refresh</button>
+        <span id="queueHint" class="muted"></span>
+      </div>
+    </section>
+
     <!-- REPOST: browse the saved FLYERS tree and post again -->
     <section class="panel" id="repostPanel">
       <h2 class="step">🔁 Repost something you already made</h2>
@@ -316,6 +327,11 @@
     <div class="post-platforms">
       <label class="chk"><input type="checkbox" id="pfFb" checked /> Facebook</label>
       <label class="chk"><input type="checkbox" id="pfIg" checked /> Instagram</label>
+    </div>
+    <div class="when-row">
+      <label class="chk"><input type="checkbox" id="postLater" /> <b>Schedule for later</b></label>
+      <input id="postWhen" type="datetime-local" class="sm-select" disabled />
+      <span id="postWhenHint" class="muted"></span>
     </div>
     <div class="dialog-actions">
       <button id="postCancel" class="ghost" type="button">Cancel</button>

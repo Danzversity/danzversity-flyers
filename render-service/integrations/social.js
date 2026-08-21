@@ -68,4 +68,36 @@ async function postVideo({ videoBuffer, caption = '', platforms = ['facebook', '
   return { ...data, publicVideoUrl: url };
 }
 
-module.exports = { isConfigured, registerPublic, getPublic, post, postVideo };
+// ── Scheduling (rail v6) ────────────────────────────────────────────────────
+// A scheduled post canNOT ride the /pub bridge above: those tokens live in this
+// process's memory for an hour, and a Render restart or a Thursday send time
+// outlives both. So the finished JPEG is handed to the rail, which owns it in
+// KV and fires it from a Cloudflare cron — no machine has to be awake.
+const RAIL_BASE = RAIL_URL.replace(/\/admin\/post-social$/, '');
+const { getJson } = require('./httpz');
+
+async function schedule({ imageBuffer, caption = '', platforms = ['facebook', 'instagram'], placement = 'feed', link, when, label, dryRun }) {
+  if (!RAIL_KEY) throw new Error('SOCIAL_RAIL_KEY not set on this server — add it in the Render dashboard env.');
+  const { status, json: data } = await postJson(`${RAIL_BASE}/admin/schedule`, {
+    key: RAIL_KEY, when, platforms, placement, text: caption, link, label, dryRun,
+    imageBase64: imageBuffer.toString('base64'),
+  }, { timeout: 60000 });
+  if (status < 200 || status >= 300) throw new Error(`schedule ${status}: ${JSON.stringify(data).slice(0, 300)}`);
+  return data;
+}
+
+async function listScheduled() {
+  if (!RAIL_KEY) throw new Error('SOCIAL_RAIL_KEY not set on this server.');
+  const { status, json: data } = await getJson(`${RAIL_BASE}/admin/scheduled?key=${encodeURIComponent(RAIL_KEY)}`, { timeout: 30000 });
+  if (status < 200 || status >= 300) throw new Error(`scheduled ${status}: ${JSON.stringify(data).slice(0, 200)}`);
+  return data;
+}
+
+async function unschedule(id) {
+  if (!RAIL_KEY) throw new Error('SOCIAL_RAIL_KEY not set on this server.');
+  const { status, json: data } = await postJson(`${RAIL_BASE}/admin/unschedule`, { key: RAIL_KEY, id }, { timeout: 30000 });
+  if (status < 200 || status >= 300) throw new Error(`unschedule ${status}: ${JSON.stringify(data).slice(0, 200)}`);
+  return data;
+}
+
+module.exports = { isConfigured, registerPublic, getPublic, post, postVideo, schedule, listScheduled, unschedule };

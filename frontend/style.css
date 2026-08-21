@@ -128,6 +128,18 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .seg-btn.active { background: var(--gold); color: #000; }
 .tile.busy { opacity: .55; pointer-events: none; }
 
+/* 🕒 Scheduling — dialog row + queue */
+.when-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.when-row input[type="datetime-local"] { font-family: inherit; }
+.when-row input:disabled { opacity: .45; }
+.queue-row { display: grid; grid-template-columns: 190px 220px 1fr auto; gap: 10px; align-items: center; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); margin-bottom: 7px; font-size: 12.5px; }
+.queue-row.done { opacity: .68; }
+.queue-row .q-when { font-weight: 700; }
+.queue-row .q-dest { color: var(--gold); }
+.queue-row .q-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-head { margin: 16px 0 7px; font-weight: 700; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+@media (max-width: 700px) { .queue-row { grid-template-columns: 1fr auto; } .queue-row .q-label { display: none; } }
+
 /* 🔁 Repost — Drive browser */
 .repost-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0 4px; }
 .crumbs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 26px; }

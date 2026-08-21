@@ -50,19 +50,22 @@ function init() {
   initPostDialog();
   initFlyerPostExisting();
   initRepost();
+  initQueue();
   checkHealth();
   initCreate();
   initVideo();
 }
 
 // ── Maker mode: "What are we making today?" — Flyer | Video ──────────────────
-const FLYER_PANELS = ['repostPanel', 'flyerPostExisting', 'createPanel', 'resultsPanel', 'inputPanel'];
+const FLYER_PANELS = ['queuePanel', 'repostPanel', 'flyerPostExisting', 'createPanel', 'resultsPanel', 'inputPanel'];
 const VIDEO_PANELS = ['videoPanel', 'videoPostExisting', 'videoResults'];
 function setMaker(m) {
   vid.maker = m === 'video' ? 'video' : 'flyer';
   document.querySelectorAll('#makerToggle .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.maker === vid.maker));
   // Results panels only reappear if they hold results — never an empty shell.
-  FLYER_PANELS.forEach((id) => $(id).classList.toggle('hidden', vid.maker !== 'flyer' || (id === 'resultsPanel' && !state.images.length)));
+  FLYER_PANELS.forEach((id) => $(id).classList.toggle('hidden', vid.maker !== 'flyer'
+    || (id === 'resultsPanel' && !state.images.length)
+    || (id === 'queuePanel' && !queue.items.length)));
   VIDEO_PANELS.forEach((id) => $(id).classList.toggle('hidden', vid.maker !== 'video' || (id === 'videoResults' && !vid.outputs.length)));
 }
 
@@ -596,6 +599,144 @@ function onSmartPost() {
   openPostDialog(entries);
 }
 
+// ── 🕒 Scheduled queue — what the rail's cron is holding ─────────────────────
+// Scheduling lives on the WORKER, not here: a Cloudflare cron fires whether or
+// not this page, the laptop, or the app is open. (The app-side scheduler
+// silently no-ops when the app is closed — that's how a 9:50 AM showcase email
+// went out 5 hours late.) This panel is just a window onto that queue.
+// `justScheduled` bridges KV's eventually-consistent list index: a job the rail
+// has definitely accepted may be missing from list() for a short while. We hold
+// our own copy for a bounded window, then trust the server — so a job that
+// genuinely failed to persist DOES eventually disappear instead of being papered
+// over forever.
+const queue = { items: [], done: [], justScheduled: new Map() };
+const JUST_SCHEDULED_MS = 120000;
+
+function initQueue() {
+  $('queueRefresh').addEventListener('click', () => loadQueue(true));
+  // The datetime input is disabled until "Schedule for later" is ticked, so a
+  // stray date can never turn an intended post-now into a post-Thursday.
+  // Toggling post-now ↔ schedule changes what the confirm click DOES, so any
+  // passed preview is invalidated — same rule as editing the caption.
+  $('postLater').addEventListener('change', () => { setPostStage('compose'); syncWhen(); });
+  $('postWhen').addEventListener('input', () => { setPostStage('compose'); syncWhen(); });
+  loadQueue();
+}
+
+function syncWhen() {
+  const on = $('postLater').checked;
+  $('postWhen').disabled = !on;
+  if (on && !$('postWhen').value) {
+    // Default to the next round hour, local time — a usable starting point that
+    // is always in the future.
+    const d = new Date(Date.now() + 3600e3);
+    d.setMinutes(0, 0, 0);
+    $('postWhen').value = localInputValue(d);
+  }
+  const hint = $('postWhenHint');
+  if (!on) { hint.textContent = ''; }
+  else {
+    const t = whenMs();
+    hint.textContent = !t ? 'pick a date & time'
+      : t <= Date.now() ? '⚠ that time is already past'
+      : `${new Date(t).toLocaleString()} · fires within ~5 min of that time`;
+  }
+  // Label only — this function must NOT reset the stage. It's called right
+  // after a passed preview flips the stage to 'confirm'; resetting here would
+  // silently undo that and leave the button stuck on "Preview →" forever.
+  // Invalidating a preview on edit is the listeners' job.
+  $('postSend').textContent = post.stage === 'confirm'
+    ? (on ? '✓ Checks passed — Schedule it' : '✓ Preview OK — Post now')
+    : 'Preview →';
+}
+
+// datetime-local speaks LOCAL wall-clock with no zone. Reading it back through
+// the Date constructor interprets it in the browser's zone (Austin), and we send
+// an absolute epoch — so the worker never has to guess a timezone or do DST math.
+function localInputValue(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function whenMs() {
+  const v = $('postWhen').value;
+  if (!v) return null;
+  const t = new Date(v).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+async function loadQueue(loud) {
+  try {
+    const j = await (await fetch(`${API}/scheduled`)).json();
+    if (!j.ok) throw new Error(j.error || 'queue unavailable');
+    queue.items = j.pending || [];
+    queue.done = j.done || [];
+    // Merge back any just-scheduled job the index hasn't surfaced yet.
+    const now = Date.now();
+    for (const [id, entry] of queue.justScheduled) {
+      if (now - entry.at > JUST_SCHEDULED_MS) { queue.justScheduled.delete(id); continue; }
+      const known = queue.items.some((x) => x.id === id) || queue.done.some((x) => x.id === id);
+      if (known) queue.justScheduled.delete(id);
+      else queue.items.push(entry.job);
+    }
+    renderQueue();
+    if (loud) toast(`${queue.items.length} scheduled, ${queue.done.length} recently fired.`, 'ok');
+  } catch (e) {
+    queue.items = []; queue.done = [];
+    renderQueue();
+    if (loud) toast('Queue unavailable: ' + e.message, 'err');
+  }
+}
+
+function renderQueue() {
+  const host = $('queueList'); host.innerHTML = '';
+  queue.items.sort((a, b) => a.when - b.when).forEach((j) => {
+    const row = el('div', 'queue-row');
+    const when = new Date(j.when);
+    const dest = `${j.platforms.join(' + ')} · ${j.placement}${j.dryRun ? ' · DRY RUN' : ''}`;
+    row.innerHTML = `<span class="q-when"></span><span class="q-dest"></span><span class="q-label muted"></span>`;
+    row.querySelector('.q-when').textContent = when.toLocaleString();
+    row.querySelector('.q-dest').textContent = dest;
+    row.querySelector('.q-label').textContent = j.label || (j.text || '').slice(0, 60);
+    const x = el('button', 'ghost sm', '✕ Cancel'); x.type = 'button';
+    x.addEventListener('click', () => onUnschedule(j.id, x));
+    row.appendChild(x);
+    host.appendChild(row);
+  });
+  // Recently fired — the proof half. A scheduler you can't audit is a scheduler
+  // you don't trust.
+  if (queue.done.length) {
+    host.appendChild(el('div', 'q-head muted', 'Recently fired'));
+    queue.done.slice(0, 8).forEach((j) => {
+      const bits = j.results ? Object.entries(j.results).map(([p, o]) => `${p} ${o.ok ? '✓' : (o.skipped ? 'skipped' : '✗')}`).join(', ') : (j.status || '');
+      const row = el('div', 'queue-row done');
+      row.innerHTML = `<span class="q-when"></span><span class="q-dest"></span><span class="q-label muted"></span>`;
+      row.querySelector('.q-when').textContent = new Date(j.when).toLocaleString();
+      row.querySelector('.q-dest').textContent = `${j.status}${bits ? ' — ' + bits : ''}`;
+      row.querySelector('.q-label').textContent = j.label || '';
+      host.appendChild(row);
+    });
+  }
+  $('queueHint').textContent = queue.items.length
+    ? `${queue.items.length} waiting · cron checks every 5 min`
+    : 'Nothing scheduled.';
+  if (vid.maker === 'flyer') $('queuePanel').classList.toggle('hidden', !queue.items.length && !queue.done.length);
+}
+
+async function onUnschedule(id, btn) {
+  btn.disabled = true; btn.textContent = 'Cancelling…';
+  try {
+    const r = await (await fetch(`${API}/unschedule`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })).json();
+    if (!r.ok) throw new Error(r.error || 'cancel failed');
+    // Drop the optimistic copy too — otherwise the merge above would resurrect
+    // a job you just cancelled for up to two minutes.
+    queue.justScheduled.delete(id);
+    queue.items = queue.items.filter((x) => x.id !== id);
+    renderQueue();
+    toast('Cancelled — it will not go out.', 'ok');
+    loadQueue();
+  } catch (e) { toast('Cancel failed: ' + e.message, 'err'); btn.disabled = false; btn.textContent = '✕ Cancel'; }
+}
+
 // ── 🔁 Repost — browse the saved FLYERS tree and run something again ─────────
 // Reposting is the highest-frequency job and used to be the clumsiest: either
 // re-compose (slow, and a cutout burns a Remove.bg call) or Drive → download →
@@ -870,7 +1011,10 @@ async function onSuggestCaptions() {
 }
 function setPostStage(stage) {
   post.stage = stage;
-  $('postSend').textContent = stage === 'confirm' ? '✓ Preview OK — Post now' : 'Preview →';
+  const later = $('postLater') && $('postLater').checked;
+  $('postSend').textContent = stage === 'confirm'
+    ? (later ? '✓ Checks passed — Schedule it' : '✓ Preview OK — Post now')
+    : 'Preview →';
 }
 function openPostDialog(plan) {
   post.plan = plan;
@@ -911,6 +1055,11 @@ function openPostDialog(plan) {
   // for Advanced-path masters where no template content exists.
   $('suggestBtn').style.display = (anyCaption && state.lastTemplateKey) ? '' : 'none';
 
+  // Always reopen in post-now mode — a schedule left ticked from last time is
+  // exactly how something silently doesn't go out today.
+  $('postLater').checked = false;
+  $('postWhen').value = '';
+  syncWhen();
   setPostStage('compose');
   $('postDialog').showModal();
 }
@@ -927,7 +1076,17 @@ async function onPostSend() {
     if (!pf.length) return toast('Pick at least one platform.', 'err');
     entries[0].platforms = pf;
   }
+  const later = $('postLater').checked;
+  const when = later ? whenMs() : null;
+  if (later) {
+    if (!when) return toast('Pick a date & time, or untick "Schedule for later".', 'err');
+    if (when <= Date.now()) return toast('That time is already past — pick a future one.', 'err');
+  }
   const mode = post.stage === 'confirm' ? 'send' : 'preview';
+  // Scheduling still goes through preview first: the checks that catch a broken
+  // asset or an illegal placement are worth MORE on a delayed send, because
+  // nobody is watching when it fires.
+  if (later && mode === 'send') return onScheduleConfirmed(entries, caption, when);
   const btn = $('postSend'); btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${mode === 'send' ? 'Posting…' : 'Checking…'}`;
   try {
     const summaries = []; let anyFail = false;
@@ -952,7 +1111,7 @@ async function onPostSend() {
         summaries.push(`${e.desc} — sent`);
       }
     }
-    if (mode === 'preview') { setPostStage('confirm'); }
+    if (mode === 'preview') { setPostStage('confirm'); syncWhen(); }
     else {
       $('postDialog').close(); setPostStage('compose');
       // Clear the batch once it has gone out — a batch left on screen invites a
@@ -963,6 +1122,50 @@ async function onPostSend() {
     }
   } catch (e) { toast('Social post failed: ' + e.message, 'err'); setPostStage('compose'); }
   finally { btn.disabled = false; }
+}
+
+// Queue every entry in the plan. Each becomes its own job on the rail, so a
+// feed post and its Story can be scheduled together and still fire/fail apart.
+async function onScheduleConfirmed(entries, caption, when) {
+  const btn = $('postSend'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Scheduling…';
+  try {
+    const done = [];
+    for (const e of entries) {
+      const r = await (await fetch(`${API}/schedule-social`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          base64: e.img.base64, driveFileId: e.img.driveFileId,
+          caption: e.useCaption ? caption : '', platforms: e.platforms, placement: e.placement,
+          fit: e.fit || undefined, when, label: e.img.label || e.desc,
+        }) })).json();
+      if (!r.ok) throw new Error(`${e.desc}: ${r.error || 'schedule failed'}`);
+      done.push(e.desc);
+      // Show it immediately. KV's list index is EVENTUALLY consistent — a job
+      // written a second ago frequently does not appear in the next list(), so
+      // a plain refresh here shows an empty queue right after you scheduled
+      // something, which reads as "it didn't work". Insert what the rail just
+      // confirmed, then reconcile below.
+      if (r.result && r.result.id) {
+        const job = { id: r.result.id, when, whenISO: r.result.whenISO, platforms: e.platforms,
+          placement: e.placement, text: e.useCaption ? caption : '', label: e.img.label || e.desc, dryRun: !!r.result.dryRun };
+        queue.items.push(job);
+        queue.justScheduled.set(job.id, { job, at: Date.now() });
+      }
+    }
+    $('postDialog').close(); setPostStage('compose');
+    $('postLater').checked = false; syncWhen();
+    if (entries.some((x) => x.source === 'existing')) { fpost.items = []; renderFPostGrid(); }
+    if (entries.some((x) => x.source === 'repost')) { repost.picks.clear(); renderRepost(); }
+    renderQueue();
+    if (vid.maker === 'flyer') $('queuePanel').classList.remove('hidden');
+    toast(`🕒 Scheduled for ${new Date(when).toLocaleString()} — ${done.join(' | ')}`, 'ok');
+    // Reconcile against the rail once KV's index has caught up, so the panel
+    // ends up showing the truth rather than our optimistic copy.
+    setTimeout(loadQueue, 8000);
+    setTimeout(loadQueue, 30000);
+  } catch (e) {
+    toast('Scheduling failed: ' + e.message, 'err');
+    setPostStage('compose');
+  } finally { btn.disabled = false; syncWhen(); }
 }
 
 // ── Downloads ───────────────────────────────────────────────────────────────

@@ -62,7 +62,7 @@ const video = require('./pipeline/video');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.11.1'; // 1.11.0: 🔁 Repost — browse the saved FLYERS Drive tree and post an asset again straight from Drive (/drive-browse, /drive-thumb, /post-social driveFileId); no download, no re-upload, no re-compose
+const VERSION = '1.12.0'; // 1.12.0: 🕒 Schedule for later — post now or queue it; the rail (v6) holds the asset in KV and fires it from a Cloudflare cron, so nothing needs to be awake
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -195,43 +195,90 @@ app.get('/pub/:token.mp4', (req, res) => {
 // at any ratio, and Instagram's feed REJECTS anything outside 4:5–1.91:1.
 // Flyers composed here are already at legal sizes and pass no `fit` at all, so
 // they still go out exactly as rendered.
+// Resolve whatever the caller gave us into the exact JPEG Meta will receive.
+// Shared by /post-social and /schedule-social ON PURPOSE: a post and the same
+// post scheduled for Thursday must be byte-identical, so there can only be one
+// preparation path. Throws with a caller-facing message on bad input.
+async function prepareSocialJpeg({ base64, driveFileId, fit, fitPolicy }) {
+  if (!base64 && !driveFileId) throw Object.assign(new Error('base64 image or driveFileId required'), { status: 400 });
+  // driveFileId = the repost path: the bytes come straight from the saved
+  // FLYERS tree, so nothing is downloaded to a laptop and re-uploaded.
+  let buf = driveFileId ? await gdrive.downloadFile(String(driveFileId)) : Buffer.from(base64, 'base64');
+  if (fit) {
+    if (!brand.sizes[fit]) throw Object.assign(new Error(`unknown fit size: ${fit}`), { status: 400 });
+    // A repost of our OWN render already IS the target size — re-deriving it
+    // would be a pointless re-encode. Only re-frame when the pixels disagree.
+    const m = await sharp(buf).metadata();
+    const target = brand.sizes[fit];
+    if (m.width !== target.w || m.height !== target.h) {
+      buf = (await deriveSize(buf, fit, { policy: fitPolicy === 'smart' ? 'smart' : 'letterbox' })).buffer;
+    }
+  } else {
+    // Un-fitted uploads can be a 6000px print master — pure waste on a
+    // 1080-wide feed, and Meta caps feed images at 8MB. Composed flyers top
+    // out at 1920 so this never touches them.
+    const m = await sharp(buf).metadata();
+    if (Math.max(m.width || 0, m.height || 0) > 1920) {
+      buf = await sharp(buf).rotate().resize(1920, 1920, { fit: 'inside' }).png({ compressionLevel: 9 }).toBuffer();
+    }
+  }
+  // Meta wants JPEG — transcode whatever comes in, flattening any transparency
+  // onto brand black so it matches the letterbox fill rather than going gray.
+  const jpeg = await sharp(buf).flatten({ background: brand.LETTERBOX_FILL }).jpeg({ quality: 92 }).toBuffer();
+  const meta = await sharp(jpeg).metadata();
+  return { jpeg, width: meta.width, height: meta.height, bytes: jpeg.length };
+}
+
 app.post('/post-social', async (req, res) => {
   try {
     const { base64, driveFileId, caption = '', platforms, placement = 'feed', mode = 'preview', link, fit, fitPolicy } = req.body || {};
-    if (!base64 && !driveFileId) return res.status(400).json({ ok: false, error: 'base64 image or driveFileId required' });
     if (!social.isConfigured()) return res.status(503).json({ ok: false, error: 'SOCIAL_RAIL_KEY not set on the server (Render env).' });
-    // driveFileId = the repost path: the bytes come straight from the saved
-    // FLYERS tree, so nothing is downloaded to a laptop and re-uploaded.
-    let buf = driveFileId ? await gdrive.downloadFile(String(driveFileId)) : Buffer.from(base64, 'base64');
-    if (fit) {
-      if (!brand.sizes[fit]) return res.status(400).json({ ok: false, error: `unknown fit size: ${fit}` });
-      // A repost of our OWN render already IS the target size — re-deriving it
-      // would be a pointless re-encode. Only re-frame when the pixels disagree.
-      const m = await sharp(buf).metadata();
-      const target = brand.sizes[fit];
-      if (m.width !== target.w || m.height !== target.h) {
-        buf = (await deriveSize(buf, fit, { policy: fitPolicy === 'smart' ? 'smart' : 'letterbox' })).buffer;
-      }
-    } else {
-      // Un-fitted uploads can be a 6000px print master — pure waste on a
-      // 1080-wide feed, and Meta caps feed images at 8MB. Composed flyers top
-      // out at 1920 so this never touches them.
-      const m = await sharp(buf).metadata();
-      if (Math.max(m.width || 0, m.height || 0) > 1920) {
-        buf = await sharp(buf).rotate().resize(1920, 1920, { fit: 'inside' }).png({ compressionLevel: 9 }).toBuffer();
-      }
-    }
-    // Meta wants JPEG — transcode whatever comes in, flattening any transparency
-    // onto brand black so it matches the letterbox fill rather than going gray.
-    const jpeg = await sharp(buf).flatten({ background: brand.LETTERBOX_FILL }).jpeg({ quality: 92 }).toBuffer();
-    const posted = await sharp(jpeg).metadata();
-    const result = await social.post({ imageBuffer: jpeg, caption, platforms, placement, mode, link });
+    const prepped = await prepareSocialJpeg({ base64, driveFileId, fit, fitPolicy });
+    const result = await social.post({ imageBuffer: prepped.jpeg, caption, platforms, placement, mode, link });
     // ok reflects the rail's verdict — false on a partial send (per-platform
     // detail rides in result.results).
-    res.json({ ok: result.ok !== false, mode, placement, posted: { width: posted.width, height: posted.height, bytes: jpeg.length }, result });
+    res.json({ ok: result.ok !== false, mode, placement, posted: { width: prepped.width, height: prepped.height, bytes: prepped.bytes }, result });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+    res.status(e.status || 500).json({ ok: false, error: e.message });
   }
+});
+
+// ── Schedule a post for later (rail v6 cron) ────────────────────────────────
+// Same body as /post-social plus `when` (epoch ms or an ISO instant WITH an
+// offset). The image is prepared here — the flyer service owns Sharp — and the
+// finished JPEG is handed to the rail, which stores it durably and fires it
+// from a Cloudflare cron. Nothing in this chain needs a machine to be awake.
+app.post('/schedule-social', async (req, res) => {
+  try {
+    const { base64, driveFileId, caption = '', platforms, placement = 'feed', link, fit, fitPolicy, when, label, dryRun } = req.body || {};
+    if (!social.isConfigured()) return res.status(503).json({ ok: false, error: 'SOCIAL_RAIL_KEY not set on the server (Render env).' });
+    if (!when) return res.status(400).json({ ok: false, error: '`when` required (epoch ms or ISO-8601 with offset)' });
+    const prepped = await prepareSocialJpeg({ base64, driveFileId, fit, fitPolicy });
+    const result = await social.schedule({
+      imageBuffer: prepped.jpeg,
+      caption: placement === 'story' ? '' : caption,
+      platforms, placement, link, when, label, dryRun,
+    });
+    res.json({ ok: result.ok !== false, scheduled: true, placement, posted: { width: prepped.width, height: prepped.height, bytes: prepped.bytes }, result });
+  } catch (e) {
+    res.status(e.status || 500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/scheduled', async (req, res) => {
+  try {
+    if (!social.isConfigured()) return res.status(503).json({ ok: false, error: 'SOCIAL_RAIL_KEY not set on the server (Render env).' });
+    res.json(await social.listScheduled());
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/unschedule', async (req, res) => {
+  try {
+    if (!social.isConfigured()) return res.status(503).json({ ok: false, error: 'SOCIAL_RAIL_KEY not set on the server (Render env).' });
+    const { id } = req.body || {};
+    if (!id) return res.status(400).json({ ok: false, error: 'id required' });
+    res.json(await social.unschedule(id));
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 // ── Repost browser: walk the saved FLYERS tree ──────────────────────────────

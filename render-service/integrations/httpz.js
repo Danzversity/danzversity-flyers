@@ -27,4 +27,21 @@ function postJson(url, body, { headers = {}, timeout = 15000 } = {}) {
   });
 }
 
-module.exports = { postJson };
+function getJson(url, { headers = {}, timeout = 15000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, { method: 'GET', headers, timeout }, (res) => {
+      let data = '';
+      res.on('data', (c) => { data += c; });
+      res.on('end', () => {
+        let json = {};
+        try { json = JSON.parse(data); } catch (_) { /* non-JSON body */ }
+        resolve({ status: res.statusCode || 0, json });
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+module.exports = { postJson, getJson };
